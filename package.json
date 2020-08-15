@@ -1,0 +1,18 @@
+{
+  "name": "cni-store-proxy",
+  "version": "1.0.0",
+  "description": "Reverse proxy for the ChRIS_store API to automatically register and run uploaded plugins",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "repository": "https://github.com/fnndsc/cni-store-proxy",
+  "author": "Jennings Zhang <Jennings.Zhang@childrens.harvard.edu>",
+  "license": "MIT",
+  "private": false,
+  "dependencies": {
+    "colors": "^1.4.0",
+    "express": "^4.17.1",
+    "http-proxy": "^1.18.1"
+  }
+}
