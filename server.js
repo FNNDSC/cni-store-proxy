@@ -12,12 +12,14 @@ const CUBE_URL = 'http://' + CUBE_HOST;
 const EVALUATOR_PLUGIN = 'fnndsc/pl-simpledsapp:latest';
 
 const app = express();
-app.use(express.json({
+const proxy = httpProxy.createProxyServer();
+
+// capture request body only on /users
+app.use('/api/v1/users/', express.json({
   type: 'application/vnd.collection+json',
   // needed to expose body to proxy
   verify: (req, res, buf) => req.rawBody = buf
 }));
-const proxy = httpProxy.createProxyServer();
 
 // create an account on BOTH ChRIS store AND CUBE.
 app.post('/api/v1/users/', (req, res) => {
@@ -25,8 +27,9 @@ app.post('/api/v1/users/', (req, res) => {
   // calling STORE after CUBE for reliability
   // ensuring CUBE account creation is successful
   createCUBEUser(req)
-    .then(() => proxyToStore(req, res))
-    .catch(axiosError => {
+    .then(() => // need to stream request body because it was consumed by JSON middleware
+      proxy.web(req, res, {target: STORE_URL, buffer: streamifier.createReadStream(req.rawBody)})
+    ).catch(axiosError => {
       const msg = axiosError.message ? colors.bold(axiosError.message) : axiosError;
       log(colors.bgWhite(colors.red(colors.bold('CUBE <-- '))), msg);
 
@@ -35,23 +38,20 @@ app.post('/api/v1/users/', (req, res) => {
     });
 });
 
-app.post('/api/v1/plugins/', (req, res) => {
-
-});
-
 app.all("/api/*", (req, res) => {
   log(req, 'vanilla proxy to STORE');
-  proxyToStore(req, res);
+  proxy.web(req, res, {target: STORE_URL});
+});
+
+proxy.on('proxyRes', (proxyRes, req, res) => {
+  if (proxyRes.path !== '/api/v1/plugins/') {
+    return;
+  }
+  console.dir(proxyRes);
 });
 
 app.listen(PORT);
 console.log(`listening on http://localhost:${PORT}/api/v1/`);
-
-
-function proxyToStore(req, res) {
-  // need to stream request body because it was consumed by JSON middleware
-  proxy.web(req, res, {target: STORE_URL, buffer: streamifier.createReadStream(req.rawBody)});
-}
 
 // create user account on CUBE and cache their credentials
 function createCUBEUser(req) {
