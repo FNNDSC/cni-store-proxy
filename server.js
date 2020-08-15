@@ -44,10 +44,20 @@ app.all("/api/*", (req, res) => {
 });
 
 proxy.on('proxyRes', (proxyRes, req, res) => {
-  if (proxyRes.path !== '/api/v1/plugins/') {
+  if (req.path !== '/api/v1/plugins/') {
     return;
   }
-  console.dir(proxyRes);
+  if (proxyRes.statusCode !== 201 || proxyRes.statusMessage !== 'Created') {
+    log(colors.bold(colors.red('Store upload failed: '
+      + `${proxyRes.statusCode} ${proxyRes.statusMessage}`)));
+    return;
+  }
+  const buffer = [];
+  proxyRes.on('data', chunk => buffer.push(chunk));
+  proxyRes.on('end', () => {
+    const body = JSON.parse(Buffer.concat(buffer).toString());
+    registerAndRunPlugin(body);
+  });
 });
 
 app.listen(PORT);
@@ -71,7 +81,7 @@ function createCUBEUser(req) {
     console.dir(res);
     return res;
   }).then(res => {
-    // TODO POST /api/v1/auth-token/
+    // maybe instead, POST /api/v1/auth-token/
     // cache credentials so later we can create feed as the user
     // for (const data of req.body.template.data) {
     //   if (data.name === 'password')
@@ -83,6 +93,11 @@ function createCUBEUser(req) {
   });
 }
 
+function registerAndRunPlugin(storeResponse) {
+  console.dir(storeResponse);
+}
+
+// colorful debugging print command with timestamps
 function log(req, info) {
   info = info ? ' ' + info : '';
   let strReq = req;
