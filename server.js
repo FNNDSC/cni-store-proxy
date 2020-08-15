@@ -19,8 +19,6 @@ app.use(express.json({
 }));
 const proxy = httpProxy.createProxyServer();
 
-const db = {};
-
 // create an account on BOTH ChRIS store AND CUBE.
 app.post('/api/v1/users/', (req, res) => {
   log(req, 'sending to both ChRIS_Store and CUBE');
@@ -37,6 +35,10 @@ app.post('/api/v1/users/', (req, res) => {
     });
 });
 
+app.post('/api/v1/plugins/', (req, res) => {
+
+});
+
 app.all("/api/*", (req, res) => {
   log(req, 'vanilla proxy to STORE');
   proxyToStore(req, res);
@@ -51,7 +53,7 @@ function proxyToStore(req, res) {
   proxy.web(req, res, {target: STORE_URL, buffer: streamifier.createReadStream(req.rawBody)});
 }
 
-
+// create user account on CUBE and cache their credentials
 function createCUBEUser(req) {
   const forwardReq = {
     method: req.method,
@@ -69,14 +71,15 @@ function createCUBEUser(req) {
     console.dir(res);
     return res;
   }).then(res => {
-    // TODO POST /api/v1/auth-token/ instead of caching password
-    for (const data of req.body.template.data) {
-      if (data.name === 'password')
-        db.lastPassword = data.value;
-      else if (data.name === 'username')
-        db.lastUsername = data.value;
-    }
-    console.dir(db);
+    // TODO POST /api/v1/auth-token/
+    // cache credentials so later we can create feed as the user
+    // for (const data of req.body.template.data) {
+    //   if (data.name === 'password')
+    //     db.lastPassword = data.value;
+    //   else if (data.name === 'username')
+    //     db.lastUsername = data.value;
+    // }
+    // console.dir(db);
   });
 }
 
