@@ -1,5 +1,6 @@
 const express = require('express');
 const httpProxy = require('http-proxy');
+const streamifier = require('streamifier');
 const axios = require('axios');
 const colors = require('colors');
 
@@ -11,24 +12,47 @@ const CUBE_URL = 'http://' + CUBE_HOST;
 const EVALUATOR_PLUGIN = 'fnndsc/pl-simpledsapp:latest';
 
 const app = express();
-app.use(express.json({type: 'application/vnd.collection+json'}));
+app.use(express.json({
+  type: 'application/vnd.collection+json',
+  // needed to expose body to proxy
+  verify: (req, res, buf) => req.rawBody = buf
+}));
 const proxy = httpProxy.createProxyServer();
+
+const db = {};
 
 // create an account on BOTH ChRIS store AND CUBE.
 app.post('/api/v1/users/', (req, res) => {
-  log(req, 'sent to both ChRIS_Store and CUBE');
-  forwardToCube(req);
-  proxy.web(req, res, {target: STORE_URL});
+  log(req, 'sending to both ChRIS_Store and CUBE');
+  // calling STORE after CUBE for reliability
+  // ensuring CUBE account creation is successful
+  createCUBEUser(req)
+    .then(() => proxyToStore(req, res))
+    .catch(axiosError => {
+      const msg = axiosError.message ? colors.bold(axiosError.message) : axiosError;
+      log(colors.bgWhite(colors.red(colors.bold('CUBE <-- '))), msg);
+
+      res.status(500);
+      res.send('Internal error creating user account on CUBE.');
+    });
 });
 
 app.all("/api/*", (req, res) => {
-  proxy.web(req, res, {target: STORE_URL});
+  log(req, 'vanilla proxy to STORE');
+  proxyToStore(req, res);
 });
 
 app.listen(PORT);
 console.log(`listening on http://localhost:${PORT}/api/v1/`);
 
-async function forwardToCube(req) {
+
+function proxyToStore(req, res) {
+  // need to stream request body because it was consumed by JSON middleware
+  proxy.web(req, res, {target: STORE_URL, buffer: streamifier.createReadStream(req.rawBody)});
+}
+
+
+function createCUBEUser(req) {
   const forwardReq = {
     method: req.method,
     baseURL: CUBE_URL,
@@ -40,15 +64,20 @@ async function forwardToCube(req) {
   forwardReq.headers.host = CUBE_HOST;
   log(colors.yellow('CUBE --> '));
   console.dir(forwardReq);
-
-  try {
-    const res = await axios(forwardReq);
+  return axios(forwardReq).then(res => {
     log(colors.green('CUBE <-- '));
     console.dir(res);
-  } catch (e) {
-    const msg = e.message ? colors.bold(e.message) : e;
-    log(colors.bgWhite(colors.red(colors.bold('CUBE <-- '))), msg);
-  }
+    return res;
+  }).then(res => {
+    // TODO POST /api/v1/auth-token/ instead of caching password
+    for (const data of req.body.template.data) {
+      if (data.name === 'password')
+        db.lastPassword = data.value;
+      else if (data.name === 'username')
+        db.lastUsername = data.value;
+    }
+    console.dir(db);
+  });
 }
 
 function log(req, info) {
