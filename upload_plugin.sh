@@ -9,7 +9,7 @@
 # docker-compose might not be able to find the container by name
 # because of how chris_dev_1 is restarted
 
-CUBE_CONTAINER=ad63d43a7f71
+CUBE_CONTAINER=e6983cbaf887
 
 ssh localhost << EOF
 set -e

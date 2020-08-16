@@ -2,15 +2,42 @@ const express = require('express');
 const httpProxy = require('http-proxy');
 const streamifier = require('streamifier');
 const axios = require('axios');
+const dotenv = require('dotenv');
 const colors = require('colors');
 const { exec } = require('child_process');
 
-const PORT = 8011;
-const STORE_URL = 'http://localhost:8010';
-const CUBE_HOST = 'localhost:8000';
-const CUBE_URL = 'http://' + CUBE_HOST;
+dotenv.config();
+const PORT = process.env.port || 8011;
+const STORE_URL = process.env.REAL_STORE_URL;
+const CUBE_URL = process.env.CUBE_URL;
+// hacky way to turn "http://localhost:8000" -> "localhost:8000"
+const CUBE_EXPECTED_HOST = CUBE_URL.split('://')[0];
 
+/**
+ * When a plugin is submitted, it is attached to a pre-existing feed
+ * where the FS plugin pl-test_data_generator was ran already.
+ *
+ * Another option to consider would be to rerun the FS plugin for every user submission.
+ */
+const SINGLE_FEED_ID = 1;
+/**
+ * Argument to pass for feed creation.
+ */
+const SUBMISSION_RUN_CONFIGURATION = [
+  {name: 'dummyInt', value: 105},
+  {name: 'sleepLength', value: '5'}
+]
+
+/**
+ * Evaluator plugin is the "leaf" which reads the results from the uploaded plugin's feed
+ * and spits out a .CSV.
+ * This plugin does not exist yet, for now we are mocking it with pl-simpledsapp
+ */
 const EVALUATOR_PLUGIN = 'fnndsc/pl-simpledsapp:latest';
+const EVALUATOR_RUN_CONFIGURATION = [
+  {name: 'b_ignoreInputDir', value: true},
+  {name: 'dummyFloat', value: 2.2}
+]
 
 const app = express();
 const proxy = httpProxy.createProxyServer();
@@ -68,7 +95,7 @@ proxy.on('proxyRes', (proxyRes, req) => {
 app.listen(PORT);
 console.log(`listening on http://localhost:${PORT}/api/v1/`);
 
-// create user account on CUBE and cache their credentials
+// create user account on CUBE and share with them the feed.
 function createCUBEUser(req) {
   const forwardReq = {
     method: req.method,
@@ -78,7 +105,7 @@ function createCUBEUser(req) {
     data: req.body,
     timeout: 5000
   };
-  forwardReq.headers.host = CUBE_HOST;
+  forwardReq.headers.host = CUBE_EXPECTED_HOST;
   print(colors.yellow('CUBE --> '));
   console.dir(forwardReq);
   return axios(forwardReq).then(res => {
@@ -86,8 +113,11 @@ function createCUBEUser(req) {
     console.dir(res);
     return res;
   }).then(res => {
+    getKeyFromList(res, 'data', 'name', 'value', 'username')
+    // TODO share root feed with user
+    // you can cache their credentials here, if needed
+    // so that we can create the feed as the user.
     // maybe instead, POST /api/v1/auth-token/
-    // cache credentials so later we can create feed as the user
     // for (const data of req.body.template.data) {
     //   if (data.name === 'password')
     //     db.lastPassword = data.value;
@@ -99,21 +129,21 @@ function createCUBEUser(req) {
 }
 
 // helper function for the annoying application/vnd.collection+json
-function getKeyFromList(list, key) {
-  for (const data of list) {
-    if (data.name === key) {
-      return data.value;
+function getKeyFromList(response, listName, keyName, valueName, targetKey) {
+  for (const data of response.collection.items[0][listName]) {
+    if (data[keyName] === targetKey) {
+      return data[valueName];
     }
   }
-  throw Error(`'${key}' not found in ${JSON.stringify(list)}`);
+  throw Error(`'${key}' not found in ${JSON.stringify(response)}`);
 }
 
 // register the plugin into CUBE and create a feed from it
 function handleSuccessfulPluginUpload(storeResponse) {
-  const pluginName = getKeyFromList(storeResponse.collection.items[0].data, 'name');
+  const pluginName = getKeyFromList(storeResponse, 'data', 'name', 'value', 'name');
   print(`uploading "${pluginName}" to CUBE...`);
   registerPluginToCUBE(pluginName);
-  createFeed(pluginName);
+  runSubmission(pluginName);
 }
 
 // as far as I know, there is no way to register a plugin via REST API
@@ -135,12 +165,43 @@ function registerPluginToCUBE(plugin) {
   });
 }
 
-// attaches the plugin to an existing feed
+// Attaches the plugin to an existing feed
 // after the FS app pl-test_data_generator
-// and then adds the evaluator plugin after the given plugin
-function createFeed(plugin) {
-  print(`creating feed for "${plugin}"`);
-  console.log('NOT IMPLEMENTED');
+// and then adds the evaluator plugin after the given plugin.
+async function runSubmission(pluginName) {
+  print(`creating feed for "${pluginName}"`);
+  const feedInfo = await appendToFeed(pluginName, SINGLE_FEED_ID, SUBMISSION_RUN_CONFIGURATION);
+  console.log(feedInfo);
+  appendToFeed(EVALUATOR_PLUGIN, feedInfo.id, EVALUATOR_RUN_CONFIGURATION);
+}
+
+async function appendToFeed(pluginName, runConfiguration, previousId) {
+  if (Number.isInteger(previousId)) {
+    previousId = { name: 'previous_id', value: previousId };
+    runConfiguration = [...runConfiguration, previousId];
+  }
+  return await axios.post({
+    url: await getPluginInstancesUrl(pluginName),
+    headers: {
+      'content-type': 'application/vnd.collection+json'
+    },
+    data: {
+      template: {
+        data: runConfiguration
+      }
+    }
+  });
+}
+
+async function getPluginInstancesUrl(plugin) {
+  const searchResults = await axios.get({
+    baseURL: CUBE_URL,
+    url: '/api/v1/plugins/search/',
+    params: {
+      name: plugin
+    }
+  });
+  return getKeyFromList(searchResults, 'links', 'rel', 'href', 'instances');
 }
 
 // colorful debugging print command with timestamps

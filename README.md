@@ -21,6 +21,14 @@ pl-test_data_generator -> <uploaded_plugin> -> pl-cni_challenge_evaluation
 Every other endpoint is proxied. This app should work exactly the same
 as the actual ChRIS Store API.
 
+## Development
+
+1. Start [ChRIS_ultron_backEnd](https://github.com/FNNDSC/ChRIS_ultron_backEnd): `./make.sh` or `./docker-deploy.sh`
+2. Set variables in `prepare.sh`, `upload_plugin.sh`, and `server.js`
+3. Run `./prepare.sh`
+4. `yarn`
+5. `yarn start`
+
 ## User Workflow
 
 1. Register an account on the ChRIS store.
