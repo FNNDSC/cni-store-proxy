@@ -5,9 +5,7 @@ A proxy to the _ChRIS Store_ API written in _express.js_ for running the
 
 ## Summary
 
-- `POST /api/v1/users/` request is duplicated, creating an account on both
-ChRIS Store and CUBE with the same username + password.
-- `POST /api/v1/plugins/` successful plugin upload to the ChRIS store
+Successful plugin upload to the ChRIS Store via `POST /api/v1/plugins/`
 automatically triggers a function to register the plugin in CUBE and to
 create a feed:
 
@@ -33,9 +31,8 @@ as the actual ChRIS Store API.
 
 1. Register an account on the ChRIS store.
 2. Upload your plugin to the ChRIS store.
-3. Log into ChRIS (same account username + password as from the Store).
-4. See running ~/fnndsc/job status in ChRIS_ui.
-5. Download results (.csv) from ChRIS_ui.
+3. TODO check progress at `GET /cni/<pluginname>/status`
+4. TODO download results from `GET /cni/<pluginname>/results`
 
 ## Resources
 
