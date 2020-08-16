@@ -1,6 +1,5 @@
 const express = require('express');
 const httpProxy = require('http-proxy');
-const streamifier = require('streamifier');
 const axios = require('axios');
 const dotenv = require('dotenv');
 const colors = require('colors');
@@ -10,8 +9,6 @@ dotenv.config();
 const PORT = process.env.port || 8011;
 const STORE_URL = process.env.REAL_STORE_URL;
 const CUBE_URL = process.env.CUBE_URL;
-// hacky way to turn "http://localhost:8000" -> "localhost:8000"
-const CUBE_EXPECTED_HOST = CUBE_URL.split('://')[0];
 
 /**
  * When a plugin is submitted, it is attached to a pre-existing feed
@@ -42,33 +39,9 @@ const EVALUATOR_RUN_CONFIGURATION = [
 const app = express();
 const proxy = httpProxy.createProxyServer();
 
-// capture request body only on /users
-app.use('/api/v1/users/', express.json({
-  type: 'application/vnd.collection+json',
-  // needed to expose body to proxy
-  verify: (req, res, buf) => req.rawBody = buf
-}));
-
-// create an account on BOTH ChRIS store AND CUBE.
-app.post('/api/v1/users/', (req, res) => {
-  print(req, 'sending to both ChRIS_Store and CUBE');
-  // calling CUBE before proxying the request to STORE
-  // ensuring that CUBE account creation is successful
-  createCUBEUser(req)
-    .then(() => // need to stream request body because it was consumed by JSON body-parse middleware
-      proxy.web(req, res, {target: STORE_URL, buffer: streamifier.createReadStream(req.rawBody)})
-    ).catch(axiosError => {
-      const msg = axiosError.message ? colors.bold(axiosError.message) : axiosError;
-      print(colors.bgWhite(colors.red(colors.bold('CUBE <-- '))), msg);
-
-      res.status(500);
-      res.send('Internal error creating user account on CUBE.');
-    });
-});
-
 // proxy all other endpoints besides /users/ (without any modification)
 app.all("/api/*", (req, res) => {
-  print(req, 'vanilla proxy to STORE');
+  print( 'vanilla proxy to STORE', req);
   proxy.web(req, res, {target: STORE_URL});
 });
 
@@ -95,50 +68,12 @@ proxy.on('proxyRes', (proxyRes, req) => {
 app.listen(PORT);
 console.log(`listening on http://localhost:${PORT}/api/v1/`);
 
-// create user account on CUBE and share with them the feed.
-function createCUBEUser(req) {
-  const forwardReq = {
-    method: req.method,
-    baseURL: CUBE_URL,
-    url: req.route.path,
-    headers: req.headers,
-    data: req.body,
-    timeout: 5000
-  };
-  forwardReq.headers.host = CUBE_EXPECTED_HOST;
-  print(colors.yellow('CUBE --> '));
-  console.dir(forwardReq);
-  return axios(forwardReq).then(res => {
-    print(colors.green('CUBE <-- '));
-    console.dir(res);
-    return res;
-  }).then(res => {
-    getKeyFromList(res, 'data', 'name', 'value', 'username')
-    // TODO share root feed with user
-    // you can cache their credentials here, if needed
-    // so that we can create the feed as the user.
-    // maybe instead, POST /api/v1/auth-token/
-    // for (const data of req.body.template.data) {
-    //   if (data.name === 'password')
-    //     db.lastPassword = data.value;
-    //   else if (data.name === 'username')
-    //     db.lastUsername = data.value;
-    // }
-    // console.dir(db);
-  });
-}
 
-// helper function for the annoying application/vnd.collection+json
-function getKeyFromList(response, listName, keyName, valueName, targetKey) {
-  for (const data of response.collection.items[0][listName]) {
-    if (data[keyName] === targetKey) {
-      return data[valueName];
-    }
-  }
-  throw Error(`'${key}' not found in ${JSON.stringify(response)}`);
-}
-
-// register the plugin into CUBE and create a feed from it
+/**
+ * Register the plugin into CUBE and create a feed from it.
+ *
+ * @param storeResponse response from Store after successful plugin upload
+ */
 function handleSuccessfulPluginUpload(storeResponse) {
   const pluginName = getKeyFromList(storeResponse, 'data', 'name', 'value', 'name');
   print(`uploading "${pluginName}" to CUBE...`);
@@ -146,11 +81,13 @@ function handleSuccessfulPluginUpload(storeResponse) {
   runSubmission(pluginName);
 }
 
-// as far as I know, there is no way to register a plugin via REST API
-// (it is possible from an HTML webpage at /chris-admin/)
-// this function might involve a synchronous (i.e. blocking) network operation!
-function registerPluginToCUBE(plugin) {
-  exec('./upload_plugin.sh ' + plugin, (error, stdout, stderr) => {
+/**
+ * Run external script to register the plugin in CUBE.
+ * This function involves a synchronous (i.e. blocking) network operation!
+ * @param pluginName
+ */
+function registerPluginToCUBE(pluginName) {
+  exec('./upload_plugin.sh ' + pluginName, (error, stdout, stderr) => {
     if (error) {
       throw error;
     }
@@ -165,17 +102,29 @@ function registerPluginToCUBE(plugin) {
   });
 }
 
-// Attaches the plugin to an existing feed
-// after the FS app pl-test_data_generator
-// and then adds the evaluator plugin after the given plugin.
+/**
+ * Attaches the plugin to an existing feed after the FS app pl-test_data_generator
+ * and then adds the evaluator plugin after the submitted plugin.
+ *
+ * @param pluginName name of plugin
+ * @return {Promise<void>}
+ */
 async function runSubmission(pluginName) {
   print(`creating feed for "${pluginName}"`);
-  const feedInfo = await appendToFeed(pluginName, SINGLE_FEED_ID, SUBMISSION_RUN_CONFIGURATION);
+  const feedInfo = await createFeed(pluginName, SINGLE_FEED_ID, SUBMISSION_RUN_CONFIGURATION);
   console.log(feedInfo);
-  appendToFeed(EVALUATOR_PLUGIN, feedInfo.id, EVALUATOR_RUN_CONFIGURATION);
+  createFeed(EVALUATOR_PLUGIN, feedInfo.id, EVALUATOR_RUN_CONFIGURATION);
 }
 
-async function appendToFeed(pluginName, runConfiguration, previousId) {
+/**
+ * Run a plugin.
+ *
+ * @param pluginName name of plugin to run
+ * @param runConfiguration arguments to run plugin with
+ * @param previousId if given, new (DS plugin) node is appended to the ID
+ * @return {Promise<AxiosResponse>}
+ */
+async function createFeed(pluginName, runConfiguration, previousId) {
   if (Number.isInteger(previousId)) {
     previousId = { name: 'previous_id', value: previousId };
     runConfiguration = [...runConfiguration, previousId];
@@ -193,21 +142,52 @@ async function appendToFeed(pluginName, runConfiguration, previousId) {
   });
 }
 
-async function getPluginInstancesUrl(plugin) {
+/**
+ * Look up the endpoint to call for creating a feed from the plugin name.
+ *
+ * E.g. "pl-dircopy" --> "http://localhost:8000/api/v1/plugins/13/instances/"
+ *
+ * @param pluginName name of plugin
+ * @return {Promise<string>}
+ */
+async function getPluginInstancesUrl(pluginName) {
   const searchResults = await axios.get({
     baseURL: CUBE_URL,
     url: '/api/v1/plugins/search/',
     params: {
-      name: plugin
+      name: pluginName
     }
   });
   return getKeyFromList(searchResults, 'links', 'rel', 'href', 'instances');
 }
 
-// colorful debugging print command with timestamps
-function print(req, info) {
+/**
+ * Helper function for the annoying application/vnd.collection+json.
+ *
+ * @param response response from server
+ * @param listName name of outer list object to search in
+ * @param keyName name of the key
+ * @param valueName name of the value you want
+ * @param targetKey which key to search for
+ * @return {*}
+ */
+function getKeyFromList(response, listName, keyName, valueName, targetKey) {
+  for (const data of response.collection.items[0][listName]) {
+    if (data[keyName] === targetKey) {
+      return data[valueName];
+    }
+  }
+  throw Error(`'${key}' not found in ${JSON.stringify(response)}`);
+}
+
+/**
+ * Colorful debugging print command with timestamps.
+ * @param info message to print
+ * @param req request object, if available
+ */
+function print(info, req) {
   info = info ? ' ' + info : '';
-  let strReq = req;
+  let strReq = req || '';
   if (req.method) {
     switch (req.method) {
       case 'GET':

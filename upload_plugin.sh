@@ -1,6 +1,6 @@
 #!/bin/bash
-
-
+# As far as I know, there is no way to register a plugin via REST API
+# (it is possible from an HTML webpage at /chris-admin/)
 
 #docker-compose -f docker-compose_dev.yml             \
 #  exec chris_dev python plugins/services/manager.py  \
