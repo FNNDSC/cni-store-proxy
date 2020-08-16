@@ -3,6 +3,7 @@ const httpProxy = require('http-proxy');
 const streamifier = require('streamifier');
 const axios = require('axios');
 const colors = require('colors');
+const { exec } = require('child_process');
 
 const PORT = 8011;
 const STORE_URL = 'http://localhost:8010';
@@ -23,32 +24,36 @@ app.use('/api/v1/users/', express.json({
 
 // create an account on BOTH ChRIS store AND CUBE.
 app.post('/api/v1/users/', (req, res) => {
-  log(req, 'sending to both ChRIS_Store and CUBE');
-  // calling STORE after CUBE for reliability
-  // ensuring CUBE account creation is successful
+  print(req, 'sending to both ChRIS_Store and CUBE');
+  // calling CUBE before proxying the request to STORE
+  // ensuring that CUBE account creation is successful
   createCUBEUser(req)
-    .then(() => // need to stream request body because it was consumed by JSON middleware
+    .then(() => // need to stream request body because it was consumed by JSON body-parse middleware
       proxy.web(req, res, {target: STORE_URL, buffer: streamifier.createReadStream(req.rawBody)})
     ).catch(axiosError => {
       const msg = axiosError.message ? colors.bold(axiosError.message) : axiosError;
-      log(colors.bgWhite(colors.red(colors.bold('CUBE <-- '))), msg);
+      print(colors.bgWhite(colors.red(colors.bold('CUBE <-- '))), msg);
 
       res.status(500);
       res.send('Internal error creating user account on CUBE.');
     });
 });
 
+// proxy all other endpoints besides /users/ (without any modification)
 app.all("/api/*", (req, res) => {
-  log(req, 'vanilla proxy to STORE');
+  print(req, 'vanilla proxy to STORE');
   proxy.web(req, res, {target: STORE_URL});
 });
 
-proxy.on('proxyRes', (proxyRes, req, res) => {
+// detect when proxy hits the /plugins/ endpoint.
+// if plugin was successfully uploaded to the Store,
+// then fire a job to register it in ChRIS and run a feed.
+proxy.on('proxyRes', (proxyRes, req) => {
   if (req.path !== '/api/v1/plugins/') {
     return;
   }
   if (proxyRes.statusCode !== 201 || proxyRes.statusMessage !== 'Created') {
-    log(colors.bold(colors.red('Store upload failed: '
+    print(colors.bold(colors.red('Store upload failed: '
       + `${proxyRes.statusCode} ${proxyRes.statusMessage}`)));
     return;
   }
@@ -56,7 +61,7 @@ proxy.on('proxyRes', (proxyRes, req, res) => {
   proxyRes.on('data', chunk => buffer.push(chunk));
   proxyRes.on('end', () => {
     const body = JSON.parse(Buffer.concat(buffer).toString());
-    registerAndRunPlugin(body);
+    handleSuccessfulPluginUpload(body);
   });
 });
 
@@ -74,10 +79,10 @@ function createCUBEUser(req) {
     timeout: 5000
   };
   forwardReq.headers.host = CUBE_HOST;
-  log(colors.yellow('CUBE --> '));
+  print(colors.yellow('CUBE --> '));
   console.dir(forwardReq);
   return axios(forwardReq).then(res => {
-    log(colors.green('CUBE <-- '));
+    print(colors.green('CUBE <-- '));
     console.dir(res);
     return res;
   }).then(res => {
@@ -93,12 +98,53 @@ function createCUBEUser(req) {
   });
 }
 
-function registerAndRunPlugin(storeResponse) {
-  console.dir(storeResponse);
+// helper function for the annoying application/vnd.collection+json
+function getKeyFromList(list, key) {
+  for (const data of list) {
+    if (data.name === key) {
+      return data.value;
+    }
+  }
+  throw Error(`'${key}' not found in ${JSON.stringify(list)}`);
+}
+
+// register the plugin into CUBE and create a feed from it
+function handleSuccessfulPluginUpload(storeResponse) {
+  const pluginName = getKeyFromList(storeResponse.collection.items[0].data, 'name');
+  print(`uploading "${pluginName}" to CUBE...`);
+  registerPluginToCUBE(pluginName);
+  createFeed(pluginName);
+}
+
+// as far as I know, there is no way to register a plugin via REST API
+// (it is possible from an HTML webpage at /chris-admin/)
+// this function might involve a synchronous (i.e. blocking) network operation!
+function registerPluginToCUBE(plugin) {
+  exec('./upload_plugin.sh ' + plugin, (error, stdout, stderr) => {
+    if (error) {
+      throw error;
+    }
+    if (stdout) {
+      print(colors.green('CUBE <-- (stdout)'));
+      console.log(stdout);
+    }
+    if (stderr) {
+      print(colors.red('CUBE <-- (stderr)'));
+      console.log(stderr);
+    }
+  });
+}
+
+// attaches the plugin to an existing feed
+// after the FS app pl-test_data_generator
+// and then adds the evaluator plugin after the given plugin
+function createFeed(plugin) {
+  print(`creating feed for "${plugin}"`);
+  console.log('NOT IMPLEMENTED');
 }
 
 // colorful debugging print command with timestamps
-function log(req, info) {
+function print(req, info) {
   info = info ? ' ' + info : '';
   let strReq = req;
   if (req.method) {
