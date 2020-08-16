@@ -26,7 +26,7 @@ as the actual ChRIS Store API.
 1. Register an account on the ChRIS store.
 2. Upload your plugin to the ChRIS store.
 3. Log into ChRIS (same account username + password as from the Store).
-4. See running job status in ChRIS_ui.
+4. See running ~/fnndsc/job status in ChRIS_ui.
 5. Download results (.csv) from ChRIS_ui.
 
 ## Resources
