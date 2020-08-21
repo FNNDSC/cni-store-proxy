@@ -16,6 +16,8 @@ http -o $tmpdir/store_upload.json -a $STORE_USER -f POST $REAL_STORE_URL/api/v1/
   name=$FS_PLUGIN_NAME
 ./upload_plugin.sh $FS_PLUGIN_NAME
 
+# TODO upload DS evaluator plugin
+
 # ========================================
 # find out instances URL
 # ========================================
@@ -49,7 +51,7 @@ http -a "$CUBE_USER" POST "$instances_url"     \
 # ========================================
 
 feed_id=$(echo $start_run | jq .id)      # e.g. 3
-feed_url="$(echo $start_run | jq .feed)" # e.g. http://localhost:8000/api/v1/3/
+feed_url=$(echo $start_run | jq -r .feed) # e.g. http://localhost:8000/api/v1/3/
 http -a "$CUBE_USER" PUT "$feed_url"           \
   Content-Type:application/vnd.collection+json \
   template:='{"data": [{"name": "name", "value": "Example CNI Challenge"}]}'

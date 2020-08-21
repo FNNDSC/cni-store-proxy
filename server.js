@@ -9,6 +9,10 @@ dotenv.config();
 const PORT = process.env.port || 8011;
 const STORE_URL = process.env.REAL_STORE_URL;
 const CUBE_URL = process.env.CUBE_URL;
+const CUBE_AUTH = {
+  username: process.env.CUBE_USER.split(':')[0],
+  password: process.env.CUBE_USER.split(':')[1]
+};
 
 /**
  * When a plugin is submitted, it is attached to a pre-existing feed
@@ -49,7 +53,7 @@ app.all("/api/*", (req, res) => {
 // if plugin was successfully uploaded to the Store,
 // then fire a job to register it in ChRIS and run a feed.
 proxy.on('proxyRes', (proxyRes, req) => {
-  if (req.path !== '/api/v1/plugins/') {
+  if (req.method !== 'POST' && req.path !== '/api/v1/plugins/') {
     return;
   }
   if (proxyRes.statusCode !== 201 || proxyRes.statusMessage !== 'Created') {
@@ -68,38 +72,40 @@ proxy.on('proxyRes', (proxyRes, req) => {
 app.listen(PORT);
 console.log(`listening on http://localhost:${PORT}/api/v1/`);
 
-
 /**
  * Register the plugin into CUBE and create a feed from it.
  *
  * @param storeResponse response from Store after successful plugin upload
  */
-function handleSuccessfulPluginUpload(storeResponse) {
+async function handleSuccessfulPluginUpload(storeResponse) {
   const pluginName = getKeyFromList(storeResponse, 'data', 'name', 'value', 'name');
   print(`uploading "${pluginName}" to CUBE...`);
-  registerPluginToCUBE(pluginName);
-  runSubmission(pluginName);
+  await registerPluginToCUBE(pluginName);
+  await runSubmission(pluginName);
 }
 
 /**
  * Run external script to register the plugin in CUBE.
- * This function involves a synchronous (i.e. blocking) network operation!
+ *
  * @param pluginName
  */
 function registerPluginToCUBE(pluginName) {
-  exec('./upload_plugin.sh ' + pluginName, (error, stdout, stderr) => {
-    if (error) {
-      throw error;
-    }
-    if (stdout) {
-      print(colors.green('CUBE <-- (stdout)'));
-      console.log(stdout);
-    }
-    if (stderr) {
-      print(colors.red('CUBE <-- (stderr)'));
-      console.log(stderr);
-    }
-  });
+  return new Promise(((resolve, reject) =>
+    exec('./upload_plugin.sh ' + pluginName, (error, stdout, stderr) => {
+      if (stdout) {
+        print(colors.green('CUBE <-- (stdout)'));
+        console.log(stdout);
+      }
+      if (stderr) {
+        print(colors.red('CUBE <-- (stderr)'));
+        console.log(stderr);
+      }
+      if (error) {
+        reject(error);
+      }
+      resolve();
+    })
+  ));
 }
 
 /**
@@ -111,9 +117,9 @@ function registerPluginToCUBE(pluginName) {
  */
 async function runSubmission(pluginName) {
   print(`creating feed for "${pluginName}"`);
-  const feedInfo = await createFeed(pluginName, SINGLE_FEED_ID, SUBMISSION_RUN_CONFIGURATION);
-  console.log(feedInfo);
-  createFeed(EVALUATOR_PLUGIN, feedInfo.id, EVALUATOR_RUN_CONFIGURATION);
+  const feedInfo = await createFeed(pluginName, SUBMISSION_RUN_CONFIGURATION, SINGLE_FEED_ID);
+  console.dir(feedInfo);
+  // await createFeed(EVALUATOR_PLUGIN, EVALUATOR_RUN_CONFIGURATION, feedInfo.id);
 }
 
 /**
@@ -129,17 +135,20 @@ async function createFeed(pluginName, runConfiguration, previousId) {
     previousId = { name: 'previous_id', value: previousId };
     runConfiguration = [...runConfiguration, previousId];
   }
-  return await axios.post({
-    url: await getPluginInstancesUrl(pluginName),
-    headers: {
-      'content-type': 'application/vnd.collection+json'
-    },
-    data: {
+  const url = await getPluginInstancesUrl(pluginName);
+  const run = await axios.post(url,
+    {
       template: {
         data: runConfiguration
       }
+    },
+    {
+    auth: CUBE_AUTH,
+    headers: {
+      'content-type': 'application/vnd.collection+json'
     }
   });
+  return run.data;
 }
 
 /**
@@ -151,14 +160,21 @@ async function createFeed(pluginName, runConfiguration, previousId) {
  * @return {Promise<string>}
  */
 async function getPluginInstancesUrl(pluginName) {
-  const searchResults = await axios.get({
+  const search = await axios({
+    method: 'GET',
     baseURL: CUBE_URL,
     url: '/api/v1/plugins/search/',
     params: {
       name: pluginName
-    }
+    },
+    auth: CUBE_AUTH
   });
-  return getKeyFromList(searchResults, 'links', 'rel', 'href', 'instances');
+  for (const uploadedPlugin of search.data.results) {
+    if (uploadedPlugin.name === pluginName) {
+      return uploadedPlugin.instances;
+    }
+  }
+  throw Error(`can't find "${pluginName}" in ${JSON.stringify(search.data)}`);
 }
 
 /**
@@ -188,7 +204,7 @@ function getKeyFromList(response, listName, keyName, valueName, targetKey) {
 function print(info, req) {
   info = info ? ' ' + info : '';
   let strReq = req || '';
-  if (req.method) {
+  if (req && req.method) {
     switch (req.method) {
       case 'GET':
         strReq = `${colors.green(req.method)}`;
