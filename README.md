@@ -22,8 +22,8 @@ as the actual ChRIS Store API.
 ## Development
 
 1. Start [ChRIS_ultron_backEnd](https://github.com/FNNDSC/ChRIS_ultron_backEnd): `./make.sh` or `./docker-deploy.sh`
-2. Set variables in `prepare.sh`, `upload_plugin.sh`, and `server.js`
-3. Run `./prepare.sh`
+2. Set `.env`
+3. Run `./prepare.sh` (depends on `jq`)
 4. `yarn`
 5. `yarn start`
 

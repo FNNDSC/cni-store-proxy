@@ -34,7 +34,7 @@ const SUBMISSION_RUN_CONFIGURATION = [
  * and spits out a .CSV.
  * This plugin does not exist yet, for now we are mocking it with pl-simpledsapp
  */
-const EVALUATOR_PLUGIN = 'fnndsc/pl-simpledsapp:latest';
+const EVALUATOR_PLUGIN = process.env.EVALUATOR_NAME;
 const EVALUATOR_RUN_CONFIGURATION = [
   {name: 'b_ignoreInputDir', value: true},
   {name: 'dummyFloat', value: 2.2}
