@@ -1,47 +1,38 @@
 const express = require('express');
 const httpProxy = require('http-proxy');
-const axios = require('axios');
 const dotenv = require('dotenv');
 const colors = require('colors');
-const { exec } = require('child_process');
+const print = require('./print');
+const Cube = require('./cube');
+
+// we will find this out in an asynchronous block
+let feedId = 0;
 
 dotenv.config();
-const PORT = process.env.port || 8011;
 const STORE_URL = process.env.REAL_STORE_URL;
-const CUBE_URL = process.env.CUBE_URL;
-const CUBE_AUTH = {
-  username: process.env.CUBE_USER.split(':')[0],
-  password: process.env.CUBE_USER.split(':')[1]
-};
+const cube = new Cube(process.env.CUBE_URL, process.env.CUBE_USER);
+
+const app = express();
+const proxy = httpProxy.createProxyServer();
 
 /**
- * When a plugin is submitted, it is attached to a pre-existing feed
- * where the FS plugin pl-test_data_generator was ran already.
- *
- * Another option to consider would be to rerun the FS plugin for every user submission.
- */
-const SINGLE_FEED_ID = 1;
-/**
- * Argument to pass for feed creation.
+ * Arguments to use when running the user-submitted plugin.
  */
 const SUBMISSION_RUN_CONFIGURATION = [
   {name: 'dummyInt', value: 105},
   {name: 'sleepLength', value: '5'}
-]
+];
 
 /**
  * Evaluator plugin is the "leaf" which reads the results from the uploaded plugin's feed
  * and spits out a .CSV.
  * This plugin does not exist yet, for now we are mocking it with pl-simpledsapp
  */
-const EVALUATOR_PLUGIN = process.env.EVALUATOR_NAME;
 const EVALUATOR_RUN_CONFIGURATION = [
   {name: 'b_ignoreInputDir', value: true},
   {name: 'dummyFloat', value: 2.2}
-]
+];
 
-const app = express();
-const proxy = httpProxy.createProxyServer();
 
 // proxy all other endpoints besides /users/ (without any modification)
 app.all("/api/*", (req, res) => {
@@ -69,8 +60,19 @@ proxy.on('proxyRes', (proxyRes, req) => {
   });
 });
 
-app.listen(PORT);
-console.log(`listening on http://localhost:${PORT}/api/v1/`);
+print(colors.dim('process started'));
+// find the FS plugin, then start the server
+cube.searchFeed(process.env.FEED_NAME).then(feed => {
+  feedId = feed.id;
+  print(`found feed for "${feed.name}" - id=${feedId}`);
+  const PORT = process.env.port || 8011;
+  app.listen(PORT);
+  print(`listening on http://localhost:${PORT}/api/v1/`);
+}).catch(e => {
+  print("couldn\'t find pre-existing feed for FS plugin "
+    + `"${process.env.FS_PLUGIN_NAME}"`);
+  console.log(e);
+});
 
 /**
  * Register the plugin into CUBE and create a feed from it.
@@ -79,33 +81,8 @@ console.log(`listening on http://localhost:${PORT}/api/v1/`);
  */
 async function handleSuccessfulPluginUpload(storeResponse) {
   const pluginName = getKeyFromList(storeResponse, 'data', 'name', 'value', 'name');
-  print(`uploading "${pluginName}" to CUBE...`);
-  await registerPluginToCUBE(pluginName);
+  await cube.registerPlugin(pluginName);
   await runSubmission(pluginName);
-}
-
-/**
- * Run external script to register the plugin in CUBE.
- *
- * @param pluginName
- */
-function registerPluginToCUBE(pluginName) {
-  return new Promise(((resolve, reject) =>
-    exec('./upload_plugin.sh ' + pluginName, (error, stdout, stderr) => {
-      if (stdout) {
-        print(colors.green('CUBE <-- (stdout)'));
-        console.log(stdout);
-      }
-      if (stderr) {
-        print(colors.red('CUBE <-- (stderr)'));
-        console.log(stderr);
-      }
-      if (error) {
-        reject(error);
-      }
-      resolve();
-    })
-  ));
 }
 
 /**
@@ -117,65 +94,11 @@ function registerPluginToCUBE(pluginName) {
  */
 async function runSubmission(pluginName) {
   print(`creating feed for "${pluginName}"`);
-  const feedInfo = await createFeed(pluginName, SUBMISSION_RUN_CONFIGURATION, SINGLE_FEED_ID);
-  console.dir(feedInfo);
+  const feedInfo = await cube.createFeed(pluginName, SUBMISSION_RUN_CONFIGURATION, feedId);
+  // TODO
   // await createFeed(EVALUATOR_PLUGIN, EVALUATOR_RUN_CONFIGURATION, feedInfo.id);
 }
 
-/**
- * Run a plugin.
- *
- * @param pluginName name of plugin to run
- * @param runConfiguration arguments to run plugin with
- * @param previousId if given, new (DS plugin) node is appended to the ID
- * @return {Promise<AxiosResponse>}
- */
-async function createFeed(pluginName, runConfiguration, previousId) {
-  if (Number.isInteger(previousId)) {
-    previousId = { name: 'previous_id', value: previousId };
-    runConfiguration = [...runConfiguration, previousId];
-  }
-  const url = await getPluginInstancesUrl(pluginName);
-  const run = await axios.post(url,
-    {
-      template: {
-        data: runConfiguration
-      }
-    },
-    {
-    auth: CUBE_AUTH,
-    headers: {
-      'content-type': 'application/vnd.collection+json'
-    }
-  });
-  return run.data;
-}
-
-/**
- * Look up the endpoint to call for creating a feed from the plugin name.
- *
- * E.g. "pl-dircopy" --> "http://localhost:8000/api/v1/plugins/13/instances/"
- *
- * @param pluginName name of plugin
- * @return {Promise<string>}
- */
-async function getPluginInstancesUrl(pluginName) {
-  const search = await axios({
-    method: 'GET',
-    baseURL: CUBE_URL,
-    url: '/api/v1/plugins/search/',
-    params: {
-      name: pluginName
-    },
-    auth: CUBE_AUTH
-  });
-  for (const uploadedPlugin of search.data.results) {
-    if (uploadedPlugin.name === pluginName) {
-      return uploadedPlugin.instances;
-    }
-  }
-  throw Error(`can't find "${pluginName}" in ${JSON.stringify(search.data)}`);
-}
 
 /**
  * Helper function for the annoying application/vnd.collection+json.
@@ -194,28 +117,4 @@ function getKeyFromList(response, listName, keyName, valueName, targetKey) {
     }
   }
   throw Error(`'${key}' not found in ${JSON.stringify(response)}`);
-}
-
-/**
- * Colorful debugging print command with timestamps.
- * @param info message to print
- * @param req request object, if available
- */
-function print(info, req) {
-  info = info ? ' ' + info : '';
-  let strReq = req || '';
-  if (req && req.method) {
-    switch (req.method) {
-      case 'GET':
-        strReq = `${colors.green(req.method)}`;
-        break;
-      case 'POST':
-        strReq = `${colors.blue(req.method)}`;
-        break;
-      default:
-        strReq = colors.cyan(req.method);
-    }
-    strReq = `${req.ip} ${strReq} ${colors.italic(req.originalUrl)}:`;
-  }
-  console.log(colors.dim(`[ ${new Date().toISOString()} ] `) + strReq + info);
 }
