@@ -95,8 +95,7 @@ async function handleSuccessfulPluginUpload(storeResponse) {
 async function runSubmission(pluginName) {
   print(`creating feed for "${pluginName}"`);
   const feedInfo = await cube.createFeed(pluginName, SUBMISSION_RUN_CONFIGURATION, feedId);
-  // TODO
-  // await createFeed(EVALUATOR_PLUGIN, EVALUATOR_RUN_CONFIGURATION, feedInfo.id);
+  await cube.createFeed(process.env.EVALUATOR_NAME, EVALUATOR_RUN_CONFIGURATION, feedInfo.id);
 }
 
 

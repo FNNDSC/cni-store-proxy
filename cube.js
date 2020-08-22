@@ -114,7 +114,7 @@ class Cube {
   }
 
   async searchFeed(feedName) {
-    const search = await this._get({ url: '/api/v1/search' });
+    const search = await this._get({ url: '/api/v1/search/' });
     for (const feed of search.results) {
       if (feed.name === feedName
         && feed.creator_username === this._user.username) {
