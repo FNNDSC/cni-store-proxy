@@ -70,7 +70,7 @@ feed_id=$(echo $start_run | jq .id)      # e.g. 3
 feed_url=$(echo $start_run | jq -r .feed) # e.g. http://localhost:8000/api/v1/3/
 http -p '' -a "$CUBE_USER" PUT "$feed_url"           \
   Content-Type:application/vnd.collection+json \
-  template:='{"data": [{"name": "name", "value": "'$FEED_NAME'"}]}'
+  template:='{"data": [{"name": "name", "value": "'"$FEED_NAME"'"}]}'
 http -p '' -a "$CUBE_USER" PUT http://localhost:8000/api/v1/note$feed_id/ \
   Content-Type:application/vnd.collection+json                      \
   template:='{"data": [{"name": "title", "value": "Description"},

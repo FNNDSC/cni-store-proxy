@@ -20,7 +20,8 @@ const proxy = httpProxy.createProxyServer();
  */
 const SUBMISSION_RUN_CONFIGURATION = [
   {name: 'dummyInt', value: 105},
-  {name: 'sleepLength', value: '5'}
+  {name: 'sleepLength', value: '5'},
+  {name: 'b_ignoreInputDir', value: true}
 ];
 
 /**
