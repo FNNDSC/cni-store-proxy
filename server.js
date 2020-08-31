@@ -45,7 +45,7 @@ app.all("/api/*", (req, res) => {
 // if plugin was successfully uploaded to the Store,
 // then fire a job to register it in ChRIS and run a feed.
 proxy.on('proxyRes', (proxyRes, req) => {
-  if (req.method !== 'POST' && req.path !== '/api/v1/plugins/') {
+  if (req.method !== 'POST' || req.path !== '/api/v1/plugins/') {
     return;
   }
   if (proxyRes.statusCode !== 201 || proxyRes.statusMessage !== 'Created') {
