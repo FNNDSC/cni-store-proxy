@@ -39,9 +39,9 @@ class Cube {
    * @return {Promise}
    */
   registerPlugin(pluginName) {
-    print(`uploading "${pluginName}" to CUBE...`);
+    print(`registering "${pluginName}" into CUBE...`);
     return new Promise(((resolve, reject) =>
-        exec('./upload_plugin.sh ' + pluginName, (error, stdout, stderr) => {
+        exec('./plugin2cube.sh ' + pluginName, (error, stdout, stderr) => {
           if (stdout) {
             print(colors.green('CUBE <-- (stdout)'));
             console.log(stdout);

@@ -26,7 +26,7 @@ function upload_plugin () {
   http -p '' -a "$STORE_USER" -f POST "$REAL_STORE_URL/api/v1/plugins/" \
     dock_image=$dock_image descriptor_file@$descriptor_file             \
     public_repo=$repo name=$plugin_name
-  ./upload_plugin.sh $plugin_name
+  ./plugin2cube.sh $plugin_name
   rm -r $tmpdir
 }
 
