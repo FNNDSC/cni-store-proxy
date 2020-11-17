@@ -123,8 +123,14 @@ Requests are proxied transparently to CUBE, e.g.
 +-------------+
 ```
 
+## Production
+
+- Set `.env`
+- Non-local CUBE necessitates a custom implementation of `plugin2cube.sh`
+
 ## Resources
 
 - http://fnndsc.childrens.harvard.edu/cnichallenge/
 - https://github.com/FNNDSC/pl-cni_challenge
 - https://github.com/FNNDSC/ChRIS_ultron_backEnd/wiki/MICCAI-Work-Flow-(WIP)
+

@@ -1,13 +1,14 @@
 #!/bin/bash
 
 source_dir=$(dirname "$(readlink -f "$0")")
+ENV="${ENV:-$source_dir/.env}"
+
+if [ -f "$ENV" ]; then
+  source $ENV
+fi
 
 if [ -f "$source_dir/parameters/plugins.env" ]; then
   source $source_dir/parameters/plugins.env
-fi
-
-if [ -f "$source_dir/.env" ]; then
-  source $source_dir/.env
 fi
 
 CUBE_AUTH="$CUBE_USERNAME:$CUBE_PASSWORD"
@@ -15,8 +16,11 @@ STORE_AUTH="$STORE_USERNAME:$STORE_PASSWORD"
 
 if ! docker exec $CUBE_CONTAINER /bin/true; then
   echo CUBE_CONTAINER is not correct
+  echo Did nothing.
   exit 1
 fi
+
+>&2 echo "Preparing for the CNI challenge..."
 
 # ========================================
 # create users in CUBE and ChRIS_store backends
@@ -110,4 +114,5 @@ http -p '' -a "$CUBE_AUTH" PUT http://localhost:8000/api/v1/note$feed_id/ \
   template:='{"data": [{"name": "title", "value": "Description"},
              {"name": "content", "value":"'"$FEED_DESCRIPTION"'"}]}'
 
-echo "feed url is $feed_url"
+echo $feed_url
+

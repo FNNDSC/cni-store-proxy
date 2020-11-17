@@ -27,15 +27,16 @@ app.all("/api/*", (req, res) => {
 print(colors.dim('process started'));
 // find the FS plugin, then start the server
 cube.searchFeed(process.env.FEED_NAME).then(feed => {
-  print(`found feed for "${feed.name}" - id=${feed.id}`);
+  print(colors.dim(`found feed for "${feed.name}" - id=${feed.id}`));
 
   new UploadDetector(cube, feed.id).attachTo(proxy);
 
   const PORT = process.env.port || 8011;
   app.listen(PORT);
-  print(`listening on http://localhost:${PORT}/api/v1/`);
+  print(colors.cyan('listening on ' + colors.underline(`http://localhost:${PORT}/api/v1/`)));
 }).catch(e => {
   print("couldn\'t find pre-existing feed for FS plugin "
     + `"${process.env.FS_PLUGIN_NAME}"`);
   console.log(e);
 });
+

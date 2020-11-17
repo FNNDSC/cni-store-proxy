@@ -4,18 +4,35 @@
 # CUBE should be running before the start of this script.
 # this script should be started by the command `yarn test`
 
-source .env
+test_dir=$(dirname "$(readlink -f "$0")")
+cd $test_dir
+[ -f ../.env ] && source ../.env
 
-# override variables by appending them to .env
-cp .env .env.bak  # TODO some better way to do hide this file
-cat >> .env << EOF
-CUBE_URL="http://localhost:8000"
-REAL_STORE_URL="http://localhost:8010"
-CUBE_CONTAINER=chris
-EOF
+./prepare.test.sh || exit 1
 
-./prepare.sh
+# start the server and wait for it
+#log=$(mktemp --suffix .log -t cni-store-proxy-XXXX)
 
-# TODO assertion
+yarn run serve &
+pid=$!
 
-mv .env.bak .env
+online=
+for poll in {0..5}; do
+  sleep 1
+  http -p '' --check-status :$PORT/api/v1/users/ 2> /dev/null \
+    && online=y && break
+done
+
+if [ -z "$online" ]; then
+  echo "server failed to start, see $log for details"
+  kill -9 $pid
+fi
+
+./integration.test.sh
+
+# Cleanup
+#########
+
+echo "Stopping server..."
+kill $pid
+
