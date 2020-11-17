@@ -8,12 +8,11 @@ const colors = require('colors');
  */
 class Cube {
 
-  constructor(url, user) {
+  constructor(url, username, password) {
     this.url = url;
-    user = user.split(':');
     this._user = {
-      username: user[0],
-      password: user[1]
+      username: username,
+      password: password
     }
     this._getAxiosConfig = {
       method: 'GET',

@@ -1,0 +1,5 @@
+[
+  {"name": "dummyInt", "value": 105},
+  {"name": "sleepLength", "value": "5"},
+  {"name": "b_ignoreInputDir", "value": true}
+]

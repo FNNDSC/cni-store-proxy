@@ -1,11 +1,45 @@
 #!/bin/bash
 
-source .env
+source_dir=$(dirname "$(readlink -f "$0")")
+
+if [ -f "$source_dir/parameters/plugins.env" ]; then
+  source $source_dir/parameters/plugins.env
+fi
+
+if [ -f "$source_dir/.env" ]; then
+  source $source_dir/.env
+fi
+
+CUBE_AUTH="$CUBE_USERNAME:$CUBE_PASSWORD"
+STORE_AUTH="$STORE_USERNAME:$STORE_PASSWORD"
 
 if ! docker exec $CUBE_CONTAINER /bin/true; then
   echo CUBE_CONTAINER is not correct
   exit 1
 fi
+
+# ========================================
+# create users in CUBE and ChRIS_store backends
+# ========================================
+
+function create_user () {
+  http -p '' --check-status -a "$3:$4" GET "$1/api/v1/" && return 0
+  http -p '' POST "$1/api/v1/users/" \
+  Content-Type:application/vnd.collection+json \
+  template:='{"data":[
+    {"name":"email","value":"'"$2"'"},
+    {"name":"username","value":"'"$3"'"},
+    {"name":"password","value":"'"$4"'"}]}'
+
+  http -p '' --check-status -a "$3:$4" GET "$1/api/v1/"
+  if [ "$?" != "0" ]; then
+    echo "could not login to $1 as $3"
+    exit 1
+  fi
+}
+
+create_user "$CUBE_URL" "$CUBE_EMAIL" "$CUBE_USERNAME" "$CUBE_PASSWORD"
+create_user "$REAL_STORE_URL" "$STORE_EMAIL" "$STORE_USERNAME" "$STORE_PASSWORD"
 
 # ========================================
 # upload FS and evaluator plugins
@@ -23,7 +57,7 @@ function upload_plugin () {
   local tmpdir=$(mktemp -d -t chris-$(date +%Hh%M,%S)-XXXXXXXXX)
   docker run -v $tmpdir:/j --rm -u $(id -u) $dock_image $script --savejson /j
   descriptor_file=$(echo $tmpdir/*.json)
-  http -p '' -a "$STORE_USER" -f POST "$REAL_STORE_URL/api/v1/plugins/" \
+  http -p '' -a "$STORE_AUTH" -f POST "$REAL_STORE_URL/api/v1/plugins/" \
     dock_image=$dock_image descriptor_file@$descriptor_file             \
     public_repo=$repo name=$plugin_name
   ./plugin2cube.sh $plugin_name
@@ -39,7 +73,7 @@ upload_plugin $EVALUATOR_DOCKER $EVALUATOR_NAME $EVALUATOR_REPO
 # ========================================
 
 #  e.g. http://localhost:8000/api/v1/plugins/13/instances/
-search_results=$(http -a $CUBE_USER "$CUBE_URL/api/v1/plugins/search/?name=$FS_PLUGIN_NAME" )
+search_results=$(http -a "$CUBE_AUTH" "$CUBE_URL/api/v1/plugins/search/?name=$FS_PLUGIN_NAME" )
 instances_url="$(node << EOF
 const searchResults = JSON.parse('$search_results');
 for (const data of searchResults.collection.items[0].links) {
@@ -57,9 +91,9 @@ EOF
 # ========================================
 
 start_run="$(
-http -a "$CUBE_USER" POST "$instances_url"     \
+http -a "$CUBE_AUTH" POST "$instances_url"     \
   Content-Type:application/vnd.collection+json \
-  template:='{ "data": [{ "name": "dir", "value": "/usr/src/data" }]}'
+  template:="$(< $source_dir/parameters/fs.json)"
 )"
 
 # ========================================
@@ -68,12 +102,12 @@ http -a "$CUBE_USER" POST "$instances_url"     \
 
 feed_id=$(echo $start_run | jq .id)      # e.g. 3
 feed_url=$(echo $start_run | jq -r .feed) # e.g. http://localhost:8000/api/v1/3/
-http -p '' -a "$CUBE_USER" PUT "$feed_url"           \
+http -p '' -a "$CUBE_AUTH" PUT "$feed_url"           \
   Content-Type:application/vnd.collection+json \
   template:='{"data": [{"name": "name", "value": "'"$FEED_NAME"'"}]}'
-http -p '' -a "$CUBE_USER" PUT http://localhost:8000/api/v1/note$feed_id/ \
+http -p '' -a "$CUBE_AUTH" PUT http://localhost:8000/api/v1/note$feed_id/ \
   Content-Type:application/vnd.collection+json                      \
   template:='{"data": [{"name": "title", "value": "Description"},
-             {"name": "content", "value":"collection+json was a mistake"}]}'
+             {"name": "content", "value":"'"$FEED_DESCRIPTION"'"}]}'
 
 echo "feed url is $feed_url"

@@ -4,7 +4,10 @@
   "description": "Reverse proxy for the ChRIS_store API to automatically register and run uploaded plugins",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "pretest": "yarn run posttest && test/cube/minimake.sh",
+    "test": "test/e2e.sh",
+    "posttest": "test/cube/unmake.sh"
   },
   "repository": "https://github.com/fnndsc/cni-store-proxy",
   "author": "Jennings Zhang <Jennings.Zhang@childrens.harvard.edu>",

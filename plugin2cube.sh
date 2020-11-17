@@ -11,9 +11,8 @@ source .env
 
 ssh -T localhost << EOF
 set -e
-cd ~/fnndsc/ChRIS_ultron_backEnd
 docker exec $CUBE_CONTAINER python plugins/services/manager.py \
-  register host --pluginname $1
+  register ${2:-host} --pluginname $1
 EOF
 
-#http -a "$CUBE_USER" "$CUBE_URL/api/v1/plugins/search/?name=$1"
+#http -a "$CUBE_USERNAME:$CUBE_PASSWORD" "$CUBE_URL/api/v1/plugins/search/?name=$1"
