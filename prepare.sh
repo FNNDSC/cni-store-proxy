@@ -56,7 +56,8 @@ function upload_plugin () {
   local dock_image=$1
   local plugin_name=$2
   local repo=$3
-  local script=$(docker inspect $dock_image | jq -r ".[].Config.Cmd[0]")
+  docker pull -q $dock_image > /dev/null
+  local script=$(docker inspect --format '{{ (index .Config.Cmd 0) }}' $dock_image)
 
   local tmpdir=$(mktemp -d -t chris-$(date +%Hh%M,%S)-XXXXXXXXX)
   docker run -v $tmpdir:/j --rm -u $(id -u) $dock_image $script --savejson /j
