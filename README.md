@@ -1,4 +1,7 @@
-# CNI ChRIS Store Proxy
+# ![ChRIS Logo](https://raw.githubusercontent.com/FNNDSC/ChRIS_ultron_backEnd/master/docs/assets/logo_chris.png) CNI ChRIS Store Proxy
+
+[![E2E CI](https://github.com/FNNDSC/cni-store-proxy/workflows/E2E%20CI/badge.svg)](https://github.com/FNNDSC/cni-store-proxy/actions)
+[![GitHub license](https://img.shields.io/github/license/FNNDSC/cni-store-proxy)](https://github.com/FNNDSC/cni-store-proxy/blob/master/LICENSE)
 
 A proxy to the _ChRIS Store_ API written in _express.js_ for running the
 [CNI MICCAI Challenge](http://fnndsc.childrens.harvard.edu/cnichallenge/).
