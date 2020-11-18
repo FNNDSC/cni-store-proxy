@@ -1,4 +1,4 @@
-name: E2E CI
+name: E2E
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
       # https://github.com/actions/cache/blob/master/examples.md#node---yarn
