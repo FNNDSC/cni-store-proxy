@@ -30,7 +30,7 @@ box running CUBE in _docker_. Other CUBE deployment setups on PaaS
 
 1. Start [ChRIS_ultron_backEnd](https://github.com/FNNDSC/ChRIS_ultron_backEnd): `./make.sh` or `./docker-deploy.sh`
 2. Set `.env`
-3. Run `./prepare.sh` (depends on [`jq`](https://stedolan.github.io/jq/))
+3. Run `./prepare.sh` (depends on [`jq`](https://stedolan.github.io/jq/) and [httpie](https://httpie.io/))
 4. `yarn`
 5. `yarn start`
 
