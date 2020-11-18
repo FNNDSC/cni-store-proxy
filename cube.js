@@ -16,7 +16,6 @@ class Cube {
     }
     this._getAxiosConfig = {
       method: 'GET',
-      baseURL: this.url,
       auth: this._user,
       headers: {
         /*
@@ -98,7 +97,7 @@ class Cube {
    * @return {Promise} result from /api/v1/plugins/search/
    */
   async searchPlugin(pluginName) {
-    const search = await this._get({
+    const search = await this.get({
       url: '/api/v1/plugins/search/',
       params: {
         name: pluginName
@@ -113,7 +112,7 @@ class Cube {
   }
 
   async searchFeed(feedName) {
-    const search = await this._get({ url: '/api/v1/search/' });
+    const search = await this.get({ url: '/api/v1/search/' });
     for (const feed of search.results) {
       if (feed.name === feedName
         && feed.creator_username === this._user.username) {
@@ -125,12 +124,21 @@ class Cube {
       + ` in ${JSON.stringify(search)}`);
   }
 
-  async _get(axiosConfig) {
-    printTx('GET', this.url + axiosConfig.url);
-    const result = await axios({
+  /**
+   * Do a GET request.
+   *
+   * @param axiosConfig
+   */
+  async get(axiosConfig) {
+    axiosConfig = {
       ...this._getAxiosConfig,
       ...axiosConfig
-    });
+    };
+    if (!axiosConfig.url.startsWith('http')) {
+      axiosConfig.baseURL = this.url;
+    }
+    printTx('GET', (axiosConfig.baseURL || '') + axiosConfig.url);
+    const result = await axios(axiosConfig);
     return result.data;
   }
 }
