@@ -1,4 +1,4 @@
-const Cube = require('../cube');
+const Cube = require('../src/cube');
 
 const cube = new Cube(
   process.env.CUBE_URL,

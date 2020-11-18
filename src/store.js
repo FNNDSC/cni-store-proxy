@@ -5,8 +5,8 @@ const colors = require('colors');
 const dotenv = require('dotenv');
 const path = require('path');
 dotenv.config({path: path.resolve(process.cwd(), 'parameters/plugins.env')});
-const SUBMISSION_RUN_CONFIGURATION = require('./parameters/submission.json');
-const EVALUATOR_RUN_CONFIGURATION = require('./parameters/evaluator.json');
+const SUBMISSION_RUN_CONFIGURATION = require('../parameters/submission.json');
+const EVALUATOR_RUN_CONFIGURATION = require('../parameters/evaluator.json');
 
 /**
  * UploadDetector connects the proxy server in front of ChRIS_store with CUBE

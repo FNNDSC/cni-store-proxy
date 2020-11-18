@@ -4,8 +4,8 @@
   "description": "Reverse proxy for the ChRIS_store API to automatically register and run uploaded plugins",
   "main": "server.js",
   "scripts": {
-    "serve": "node server.js",
-    "postinstall": "git submodule update --init && [ -e .env ] || ln -sv test/local.env .env",
+    "serve": "node src/server.js",
+    "postinstall": "git submodule update --init && [ -e .env ] || ln -sv cube/local.env .env",
     "prestart": "yarn run cube:restart && ./prepare.sh",
     "start": "yarn run serve",
     "cube:up": "cube/minimake/minimake.sh",
