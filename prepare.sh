@@ -27,16 +27,18 @@ fi
 # ========================================
 
 function create_user () {
-  http -p '' --check-status -a "$3:$4" GET "$1/api/v1/" && return 0
-  http -p '' POST "$1/api/v1/users/" \
-  Content-Type:application/vnd.collection+json \
-  template:='{"data":[
+  res_code=$(curl -so /dev/null  -w '%{http_code}' -u "$3:$4" "$1/api/v1/")
+  [ "$res_code" = "200" ] && return 0  # account already exists
+  
+  curl -so /dev/null "$1/api/v1/users/" \
+    -H 'Content-Type: application/vnd.collection+json' \
+    --data '{"template":{"data":[
     {"name":"email","value":"'"$2"'"},
     {"name":"username","value":"'"$3"'"},
-    {"name":"password","value":"'"$4"'"}]}'
+    {"name":"password","value":"'"$4"'"}]}}'
 
-  http -p '' --check-status -a "$3:$4" GET "$1/api/v1/"
-  if [ "$?" != "0" ]; then
+  res_code=$(curl -so /dev/null  -w '%{http_code}' -u "$3:$4" "$1/api/v1/")
+  if [ "$res_code" != "200" ]; then
     echo "could not login to $1 as $3"
     exit 1
   fi
@@ -59,12 +61,14 @@ function upload_plugin () {
   docker pull -q $dock_image > /dev/null
   local script=$(docker inspect --format '{{ (index .Config.Cmd 0) }}' $dock_image)
 
-  local tmpdir=$(mktemp -d -t chris-$(date +%Hh%M,%S)-XXXXXXXXX)
+  local tmpdir=$(mktemp -d -t chris-$(date +%H%M%S)-XXXXXXXXX)
   docker run -v $tmpdir:/j --rm -u $(id -u) $dock_image $script --savejson /j
-  descriptor_file=$(echo $tmpdir/*.json)
-  http -p '' -a "$STORE_AUTH" -f POST "$REAL_STORE_URL/api/v1/plugins/" \
-    dock_image=$dock_image descriptor_file@$descriptor_file             \
-    public_repo=$repo name=$plugin_name
+  local descriptor_file=$(echo $tmpdir/*.json)
+  curl -so /dev/null -u "$STORE_AUTH" "$REAL_STORE_URL/api/v1/plugins/" \
+    -F "name=$plugin_name" \
+    -F "dock_image=$dock_image"  \
+    -F "descriptor_file=@$descriptor_file" \
+    -F "public_repo=$repo"
   ./plugin2cube.sh $plugin_name
   rm -r $tmpdir
 }
@@ -78,42 +82,35 @@ upload_plugin $EVALUATOR_DOCKER $EVALUATOR_NAME $EVALUATOR_REPO
 # ========================================
 
 #  e.g. http://localhost:8000/api/v1/plugins/13/instances/
-search_results=$(http -a "$CUBE_AUTH" "$CUBE_URL/api/v1/plugins/search/?name=$FS_PLUGIN_NAME" )
-instances_url="$(node << EOF
-const searchResults = JSON.parse('$search_results');
-for (const data of searchResults.collection.items[0].links) {
-  if (data.rel === 'instances') {
-    console.log(data.href);
-    process.exit(0);
-  }
-}
-process.exit(1);
-EOF
-)"
+search_results=$(
+  curl -s -u "$CUBE_AUTH" "$CUBE_URL/api/v1/plugins/search/?name=$FS_PLUGIN_NAME" \
+    -H 'Accept: application/json'
+)
+instances_url="$(echo $search_results | jq -r .results[0].instances)"
 
 # ========================================
 # create feed
 # ========================================
 
 start_run="$(
-http -a "$CUBE_AUTH" POST "$instances_url"     \
-  Content-Type:application/vnd.collection+json \
-  template:="$(< $source_dir/parameters/fs.json)"
+curl -s -u "$CUBE_AUTH" "$instances_url" \
+  -H 'Content-Type: application/vnd.collection+json' \
+  -H 'Accept: application/json' \
+  --data "{\"template\":$(< $source_dir/parameters/fs.json)}"
 )"
 
 # ========================================
 # set feed title and description
 # ========================================
 
-feed_id=$(echo $start_run | jq .id)      # e.g. 3
+feed_id=$(echo $start_run | jq -r .id)      # e.g. 3
 feed_url=$(echo $start_run | jq -r .feed) # e.g. http://localhost:8000/api/v1/3/
-http -p '' -a "$CUBE_AUTH" PUT "$feed_url"           \
-  Content-Type:application/vnd.collection+json \
-  template:='{"data": [{"name": "name", "value": "'"$FEED_NAME"'"}]}'
-http -p '' -a "$CUBE_AUTH" PUT http://localhost:8000/api/v1/note$feed_id/ \
-  Content-Type:application/vnd.collection+json                      \
-  template:='{"data": [{"name": "title", "value": "Description"},
-             {"name": "content", "value":"'"$FEED_DESCRIPTION"'"}]}'
+curl -so /dev/null -u "$CUBE_AUTH" -X PUT "$feed_url" \
+  -H 'Content-Type: application/vnd.collection+json' \
+  --data '{"template":{"data": [{"name": "name", "value": "'"$FEED_NAME"'"}]}}'
+curl -so /dev/null -u "$CUBE_AUTH" -X PUT "http://localhost:8000/api/v1/note$feed_id/" \
+  -H 'Content-Type: application/vnd.collection+json' \
+  --data '{"template":{"data": [{"name": "title", "value": "Description"},
+          {"name": "content", "value":"'"$FEED_DESCRIPTION"'"}]}'
 
 echo $feed_url
-
