@@ -24,7 +24,7 @@ describe('ChRIS_store proxy to /api/', () => {
       .send(userInfo)
       .set('Content-Type', 'application/vnd.collection+json')
       .set('Accept', 'application/vnd.collection+json');
-    
+
     const userLogin = {
       username: 'alice',
       password: 'bob12345'
@@ -34,5 +34,17 @@ describe('ChRIS_store proxy to /api/', () => {
       .send(userLogin)
       .expect(200);
     expect(authRes.body.token).toBeDefined();
+  });
+
+  it('should not crash when user submits invalid plugin', async () => {
+    // TODO
+  });
+
+  it('should reject submissions with any required options', async () => {
+    // TODO
+  });
+
+  it('should create a feed after successful plugin upload', async () => {
+    // TODO
   });
 });
