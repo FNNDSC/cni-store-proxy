@@ -6,12 +6,13 @@
   "scripts": {
     "serve": "node src/server.js",
     "postinstall": "git submodule update --init && [ -e .env ] || ln -sv cube/local.env .env",
-    "prestart": "yarn run cube:restart && ./prepare.sh",
+    "prestart": "yarn -s run cube:check || ( yarn run cube:up && ./prepare.sh )",
     "start": "yarn run serve",
     "cube:up": "cube/minimake/minimake.sh",
     "cube:down": "cube/minimake/unmake.sh",
     "cube:restart": "yarn run cube:down && yarn run cube:up",
-    "pretest": "yarn run prestart",
+    "cube:check": "curl -s http://localhost:8010/api/v1/users/ | grep -q username",
+    "pretest": "yarn run cube:restart && ./prepare.sh",
     "test": "jest --silent",
     "posttest": "yarn run cube:down"
   },
