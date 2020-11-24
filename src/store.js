@@ -68,6 +68,32 @@ class UploadDetector {
       });
     });
   }
+
+  /**
+   * Check that the submitted plugin's JSON representation allows for
+   * the plugin to be run by pre-defined parameters.
+   *
+   * Typically, challenge submissions are run without additional options
+   * (aside from the positional arguments /incoming /outgoing). In this
+   * case, this function simply checks that none of the parameters are
+   * declared with
+   *
+   *     "optional": false
+   *
+   * This function should be used as middleware on the
+   *
+   * POST /api/v1/plugins/
+   *
+   * endpoint, prior to proxying.
+   *
+   * @param req request
+   * @param res response
+   * @param next next middleware to call
+   */
+  static validatePlugin(req, res, next) {
+    console.log('lets take a look');
+    next();
+  }
 }
 
 /**

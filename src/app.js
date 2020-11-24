@@ -19,8 +19,10 @@ const cube = new Cube(
 const app = express();
 const proxy = httpProxy.createProxyServer();
 
+app.post('/api/v1/plugins/', UploadDetector.validatePlugin);
+
 // send everything on /api/ to the ChRIS_store backend
-app.all("/api/*", (req, res) => {
+app.all('/api/*', (req, res) => {
   print( colors.dim('--> ChRIS_store'), req);
   proxy.web(req, res, {target: STORE_URL});
 });
