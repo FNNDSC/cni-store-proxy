@@ -48,6 +48,12 @@ class UploadDetector {
 
   /**
    * Configure the http-proxy object to listen for successful plugin uploads.
+   *
+   * Following successful plugin upload to ChRIS_Store, sending it to CUBE
+   * happens asynchronously. The feed will not be immediately available
+   * in CUBE, instead the client can expect the feed to appear in CUBE
+   * shortly (assuming integration tests pass and CUBE is healthy).
+   *
    * @param proxy proxy server object
    */
   attachTo(proxy) {
@@ -91,7 +97,7 @@ class UploadDetector {
    * @param next next middleware to call
    */
   static validatePlugin(req, res, next) {
-    console.log('lets take a look');
+    // TODO
     next();
   }
 }
