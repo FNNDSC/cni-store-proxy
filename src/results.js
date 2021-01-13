@@ -9,7 +9,7 @@ const {
 
 // noinspection EqualityComparisonWithCoercionJS
 class SubmissionResultsProxy {
-  constructor(cube, storeUrl) {
+  constructor(cube, storeUrl, trustProxy) {
     this.cube = cube;
     this.storeUrl = storeUrl;
 
@@ -25,7 +25,12 @@ class SubmissionResultsProxy {
     });
 
     this.router.get('/:id/files/', async (req, res) => {
-      res.json(await this.getFilesListInfo(res.locals.evalInst.href));
+      // if server is behind a reverse-proxy, use X-Forwarded-Host (:port not be included, fix yo gateway)
+      // if server is not behind a reverse-proxy, use Host (:port will be included, useful for devel
+      const host = trustProxy ? req.hostname : req.headers.host;
+
+      const url = `${req.protocol}://${host}${req.originalUrl}`;
+      res.json(await this.getFilesListInfo(res.locals.evalInst.href, url));
     });
   }
 
@@ -202,12 +207,20 @@ class SubmissionResultsProxy {
    *     /api/v1/plugins/instances/<N>/files/
    *
    * @param instHref something like `/api/v1/plugins/instances/<N>/`
+   * @param baseUrl url of this server, something like https://cni.example.com/cni/<N>/files/
    * @return {Promise<*>}
    */
-  async getFilesListInfo(instHref) {
+  async getFilesListInfo(instHref, baseUrl) {
     const inst = await this.cube.get({url: instHref});
     const filesList = await this.cube.get({ url: inst.files });
-    return filesList;
+    return {
+      results: filesList.results.map(file => {
+        return {
+          creation_date: file.creation_date,
+          file_resource: file.file_resource.replace(/^.+\/api\/v1\/files/, baseUrl)
+        }
+      })
+    };
   }
 }
 

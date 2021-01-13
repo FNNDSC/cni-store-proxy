@@ -22,6 +22,10 @@ const cube = new Cube(
 const app = express();
 const proxy = httpProxy.createProxyServer();
 
+if (process.env.CNI_BACKEND_TRUST_PROXY) {
+  app.enable('trust proxy');
+}
+
 app.post('/api/v1/plugins/', UploadDetector.validatePlugin);
 
 // send everything on /api/ to the ChRIS_store backend
@@ -30,7 +34,8 @@ app.all('/api/*', (req, res) => {
   proxy.web(req, res, {target: STORE_URL});
 });
 
-app.use('/cni', (new SubmissionResultsProxy(cube, STORE_URL)).router);
+
+app.use('/cni', (new SubmissionResultsProxy(cube, STORE_URL, app.get('trust proxy'))).router);
 
 let fsInstanceId = null;
 
