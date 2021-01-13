@@ -132,7 +132,7 @@ class Cube {
   async get(axiosConfig) {
     axiosConfig = {
       ...this._getAxiosConfig,
-      ...axiosConfig
+      ...(axiosConfig || {})
     };
     if (!axiosConfig.url.startsWith('http')) {
       axiosConfig.baseURL = this.url;
