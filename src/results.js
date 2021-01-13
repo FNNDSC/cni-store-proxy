@@ -1,6 +1,8 @@
 const axios = require('axios');
 const print = require('./print');
 const colors = require('colors');
+const express = require('express');
+
 const {
   NotLoggedIntoStoreError, SubmissionNotFoundError, CniCubeIntegrityError
 } = require('./errors');
@@ -10,23 +12,37 @@ class SubmissionResultsProxy {
   constructor(cube, storeUrl) {
     this.cube = cube;
     this.storeUrl = storeUrl;
+
+    // might be more elegant to extend express.Router instead
+    // however for whatever reason, subclasses of express.Router
+    // cannot define methods
+    this.router = express.Router();
+
+    this.router.use('/:id', (req, res, next) => this.instanceIdMiddleware(req, res, next));
+
+    this.router.get('/:id/', async (req, res) => {
+      res.json(await this.getLimitedInstancesInfo(res.locals.evalInst.href));
+    });
+
+    this.router.get('/:id/files/', async (req, res) => {
+      res.json(await this.getFilesListInfo(res.locals.evalInst.href));
+    });
   }
 
   /**
-   * Handle the client's request, which was made to this server
-   * (the cni-store-proxy) by making a query to CUBE about a
-   * plugin instance given the ID of that plugin in the ChRIS store.
+   * Middleware to authenticate against the ChRIS_Store
+   * and populate res.locals.evalInst with the ID of the evaluator plugin instance.
    *
-   * This method does routing under the /cni/<N>/* space.
-   *
-   * @param req request
-   * @param res response
    * @return {Promise<void>}
    */
-  async cubeImpersonation(req, res) {
-    let evalInstId;
+  async instanceIdMiddleware(req, res, next) {
     try {
-      evalInstId = await this.getEvaluation(req);
+      const evalInstId = await this.getEvaluation(req);
+      res.locals.evalInst = {
+        id: evalInstId,
+        href: `/api/v1/plugins/instances/${evalInstId}`
+      };
+      next();
     } catch (e) {
       const debugMessage = `${colors.italic(req.originalUrl)} -> ${colors.red(e.message)}`;
       if (e instanceof NotLoggedIntoStoreError) {
@@ -40,13 +56,6 @@ class SubmissionResultsProxy {
         return;
       }
       throw e;
-    }
-    if (req.params.tail === '') {
-      const feedback = await this.getLimitedInstancesInfo(`/api/v1/plugins/instances/${evalInstId}`);
-      res.json(feedback);
-    }
-    else {
-      res.send('your tail: ' + req.params.tail);
     }
   }
 
@@ -184,6 +193,21 @@ class SubmissionResultsProxy {
       plugin_name: inst.plugin_name,
       plugin_version: inst.plugin_version
     }
+  }
+
+  /**
+   * Get list of files produced by a plugin instance.
+   * Returns a filtered output from
+   *
+   *     /api/v1/plugins/instances/<N>/files/
+   *
+   * @param instHref something like `/api/v1/plugins/instances/<N>/`
+   * @return {Promise<*>}
+   */
+  async getFilesListInfo(instHref) {
+    const inst = await this.cube.get({url: instHref});
+    const filesList = await this.cube.get({ url: inst.files });
+    return filesList;
   }
 }
 
