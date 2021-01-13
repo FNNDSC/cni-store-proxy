@@ -4,11 +4,28 @@ const colors = require('colors');
 const express = require('express');
 
 const {
-  NotLoggedIntoStoreError, SubmissionNotFoundError, CniCubeIntegrityError
+  NotLoggedIntoStoreError,
+  SubmissionNotFoundError,
+  CniCubeIntegrityError,
+  FileNameIdMismatchError,
+  FileNotInCubeError
 } = require('./errors');
 
 // noinspection EqualityComparisonWithCoercionJS
+/**
+ * Handles retrieval of job status and downloading of resutts files from CUBE.
+ * Given an id number representing the plugin id in ChRIS_store,
+ * SubmissionResultsProxy will find the corresponding plugin feed ID of the evaluator
+ * for the user's submission and return information about the evaluator.
+ */
 class SubmissionResultsProxy {
+  /**
+   * Constructor for SubmissionResulttsProxy
+   *
+   * @param cube
+   * @param storeUrl
+   * @param trustProxy
+   */
   constructor(cube, storeUrl, trustProxy) {
     this.cube = cube;
     this.storeUrl = storeUrl;
@@ -18,19 +35,41 @@ class SubmissionResultsProxy {
     // cannot define methods
     this.router = express.Router();
 
+    // if server is behind a reverse-proxy, use X-Forwarded-Host (:port not be included, fix yo gateway)
+    // if server is not behind a reverse-proxy, use Host (:port will be included, useful for devel
+    this.router.use((req, res, next) => {
+      const host = trustProxy ? req.hostname : req.headers.host;
+      res.locals.url = `${req.protocol}://${host}${req.originalUrl}`;
+      next();
+    });
+
     this.router.use('/:id', (req, res, next) => this.instanceIdMiddleware(req, res, next));
 
     this.router.get('/:id/', async (req, res) => {
-      res.json(await this.getLimitedInstancesInfo(res.locals.evalInst.href));
+      res.json(await this.getLimitedInstancesInfo(res.locals.evalInst.href, res.locals.url));
     });
 
     this.router.get('/:id/files/', async (req, res) => {
-      // if server is behind a reverse-proxy, use X-Forwarded-Host (:port not be included, fix yo gateway)
-      // if server is not behind a reverse-proxy, use Host (:port will be included, useful for devel
-      const host = trustProxy ? req.hostname : req.headers.host;
+      res.json(await this.getFilesListInfo(res.locals.evalInst.href, res.locals.url));
+    });
 
-      const url = `${req.protocol}://${host}${req.originalUrl}`;
-      res.json(await this.getFilesListInfo(res.locals.evalInst.href, url));
+    this.router.get('/:id/files/:fid/:filename', async (req, res) => {
+      try {
+        res.send(await this.downloadFile(res.locals.evalInst.href, req.params.fid, req.params.filename));
+      } catch (e) {
+        const debugMessage = `${colors.italic(req.originalUrl)} -> ${colors.red(e.message)}`;
+        if (e instanceof FileNotInCubeError) {
+          print(debugMessage);
+          res.sendStatus(404);
+          return;
+        }
+        if (e instanceof FileNameIdMismatchError) {
+          print(debugMessage);
+          res.sendStatus(404);
+          return;
+        }
+        throw e;
+      }
     });
   }
 
@@ -75,7 +114,7 @@ class SubmissionResultsProxy {
    * @param req request
    */
   async getEvaluation(req) {
-    const pinfo = colors.dim(`(${Date.now()})${colors.italic(req.originalUrl)} - `);
+    const pinfo = colors.dim(`${colors.italic(req.originalUrl)} - `);
 
     const ownedPluginMetasHref = await this.getOwnedPluginMetaHref(req);
     const pluginName = await this.getPluginName(req, ownedPluginMetasHref);
@@ -131,7 +170,6 @@ class SubmissionResultsProxy {
    * @return {Promise<string>}
    */
   async getPluginName(req, ownedPluginMetasHref) {
-    // TODO pagination
     const ownedPlugins = await axios.get(
       ownedPluginMetasHref,
       {
@@ -185,19 +223,26 @@ class SubmissionResultsProxy {
    * of keys returned.
    *
    * @param href instances href
+   * @param baseUrl url of this server
    * @return {Promise<{*>}
    */
-  async getLimitedInstancesInfo(href) {
+  async getLimitedInstancesInfo(href, baseUrl) {
     const inst = await this.cube.get({
       url: href
     });
     return {
-      files: inst.files, // TODO
+      files: baseUrl + 'files/',
       summary: inst.summary,
       status: inst.status,
       plugin_name: inst.plugin_name,
       plugin_version: inst.plugin_version
     }
+  }
+
+  async filesInCube(instHref) {
+    const inst = await this.cube.get({url: instHref});
+    const response = await this.cube.get({ url: inst.files });
+    return response.results;
   }
 
   /**
@@ -211,16 +256,50 @@ class SubmissionResultsProxy {
    * @return {Promise<*>}
    */
   async getFilesListInfo(instHref, baseUrl) {
-    const inst = await this.cube.get({url: instHref});
-    const filesList = await this.cube.get({ url: inst.files });
+    const filesList = await this.filesInCube(instHref);
     return {
-      results: filesList.results.map(file => {
+      results: filesList.map(file => {
         return {
           creation_date: file.creation_date,
-          file_resource: file.file_resource.replace(/^.+\/api\/v1\/files/, baseUrl)
+          file_resource: file.file_resource.replace(/^.+\/api\/v1\/files\//, baseUrl)
         }
       })
     };
+  }
+
+  /**
+   * Download a file from CUBE and then send it back to the user.
+   *
+   * @param instHref plugin instance which this file comes from
+   * @param fid file id
+   * @param filename file basename
+   * @throws FileNotInCubeError
+   * @throws FileNameIdMismatchError
+   * @return {Promise<*>}
+   */
+  async downloadFile(instHref, fid, filename) {
+    const filesList = await this.filesInCube(instHref);
+    for (const file of filesList) {
+      if (file.id == fid) {
+        if (!file.fname.endsWith(filename)) {
+          throw new FileNameIdMismatchError(`given wrong filename for file.id=${file.id} fname=${file.fname}`);
+        }
+        /*
+         * Note about performance:
+         * Entire file from CUBE is buffered into memory before responding.
+         * The perfect solution would stream data instead.
+         *
+         * Not a problem for small text files.
+         */
+        return await this.cube.get({
+          url: file.file_resource,
+          headers: {
+            accept: '*/*'
+          }
+        });
+      }
+    }
+    throw new FileNotInCubeError(`either you don't own file id=${fid} or that file doesn't exist in CUBE`);
   }
 }
 

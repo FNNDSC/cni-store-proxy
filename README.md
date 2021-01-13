@@ -29,19 +29,12 @@ API | description
 `/api/v1/*` | transparently proxied to ChRIS_store
 POST `/api/v1/plugins` | on successful upload to ChRIS_store, plugin name is relayed to CUBE, registered, and the challenge feed is created.
 `/cni/<N>/` | what's the status of a job? Where `<N>` is the plugin ID in the ChRIS_Store corresponding to a user's submission
-`cni/<N>/files/` | list files produced by the evaluator plugin
+`/cni/<N>/files/` | list files produced by the evaluator plugin
+`/cni/<N>/files/<F>/<filename>`| download `filename` from CUBE
 
-### `/cni/<N>/`
+### Example Results Responses
 
-```json
-{
-    "files": "http://localhost:8000/api/v1/plugins/instances/3/files/",
-    "plugin_name": "cni-evaluator",
-    "plugin_version": "1.0.8",
-    "status": "finishedSuccessfully",
-    "summary": "{\"compute\": {\"return\": {\"l_logs\": [\"your stuff was evaluated\"], \"l_status\": [\"finishedSuccessfully\"], \"status\": true}, \"status\": true, \"submit\": {\"status\": true}}, \"pullPath\": {\"status\": true}, \"pushPath\": {\"status\": true}, \"status\": true, \"swiftPut\": {\"status\": true}}"
-}
-```
+#### `/cni/<N>/`
 
 `status` will be one of
 
@@ -50,12 +43,66 @@ POST `/api/v1/plugins` | on successful upload to ChRIS_store, plugin name is rel
 3. `started`
 4. `finishedSuccessfully`
 
+```json
+{
+  "files": "/cni/4/files/",
+  "plugin_name": "cni-evaluator",
+  "plugin_version": "1.0.8",
+  "status": "finishedSuccessfully",
+  "summary": "{\"compute\": {\"return\": {\"l_logs\": [\"your stuff was evaluated\"], \"l_status\": [\"finishedSuccessfully\"], \"status\": true}, \"status\": true, \"submit\": {\"status\": true}}, \"pullPath\": {\"status\": true}, \"pushPath\": {\"status\": true}, \"status\": true, \"swiftPut\": {\"status\": true}}"
+}
+```
+
+#### `/cni/<N>/files/`
+
+List files produced by the evaluator plugin.
+
+```json
+{
+  "results": [
+    {
+      "creation_date": "2021-01-13T06:13:02.358853-05:00",
+      "file_resource": "/cni/5/files/529/timestamp.json"
+    },
+    {
+      "creation_date": "2021-01-13T06:13:02.357315-05:00",
+      "file_resource": "/cni/5/files/528/output.meta.json"
+    },
+    {
+      "creation_date": "2021-01-13T06:13:02.356109-05:00",
+      "file_resource": "/cni/5/files/527/jobStatusSummary.json"
+    },
+    {
+      "creation_date": "2021-01-13T06:13:02.354619-05:00",
+      "file_resource": "/cni/5/files/526/jobStatus.json"
+    },
+    {
+      "creation_date": "2021-01-13T06:13:02.352574-05:00",
+      "file_resource": "/cni/5/files/525/input.meta.json"
+    },
+    {
+      "creation_date": "2021-01-13T06:13:02.356415-05:00",
+      "file_resource": "/cni/5/files/525/results.csv"
+    }
+  ]
+}
+```
+
+#### `/cni/<N>/files/<F>/results.csv`
+
+Just a file download.
+
+```
+how you did,out of 8
+you did gr8,8
+```
+
 ### User Workflow
 
 1. Register an account on the ChRIS store.
 2. Upload your plugin to the ChRIS store.
-3. TODO check progress at `GET /cni/<pluginId>/instances/`
-4. TODO download results from `GET /cni/<pluginId>/files/evaluation.tsv`
+3. check progress at `GET /cni/<pluginId>/`
+4. download results from `GET /cni/<pluginId>/files/<F>/evaluation.tsv`
 
 #### User Example
 
@@ -177,6 +224,7 @@ Requests are proxied transparently to CUBE, e.g.
 
 - Set `.env`
 - Non-local CUBE necessitates a custom implementation of `plugin2cube.sh`
+- If behind a reverse-proxy, set `CNI_BACKEND_TRUST_PROXY=y`
 
 ## Resources
 
