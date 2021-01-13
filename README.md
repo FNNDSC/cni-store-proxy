@@ -27,7 +27,7 @@ as the actual ChRIS Store API.
 API | description
 ----|------------
 `/api/v1/*` | transparently proxied to ChRIS_store
-POST `/api/v1/plugins` | on successful upload to ChRIS_store, plugin name is relayed to CUBE, registered, and the challenge feed is created.
+POST `/api/v1/plugins/` | on successful upload to ChRIS_store, plugin name is relayed to CUBE, registered, and the challenge feed is created.
 `/cni/<N>/` | what's the status of a job? Where `<N>` is the plugin ID in the ChRIS_Store corresponding to a user's submission
 `/cni/<N>/files/` | list files produced by the evaluator plugin
 `/cni/<N>/files/<F>/<filename>`| download `filename` from CUBE
