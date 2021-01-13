@@ -22,6 +22,60 @@ pl-test_data_generator -> <uploaded_plugin> -> pl-cni_challenge_evaluation
 Every other endpoint is proxied. This app should work exactly the same
 as the actual ChRIS Store API.
 
+## API
+
+API | description
+----|------------
+`/api/v1/*` | transparently proxied to ChRIS_store
+POST `/api/v1/plugins` | on successful upload to ChRIS_store, plugin name is relayed to CUBE, registered, and the challenge feed is created.
+`/cni/<N>/` | what's the status of a job? Where `<N>` is the plugin ID in the ChRIS_Store corresponding to a user's submission
+`cni/<N>/files/` | list files produced by the evaluator plugin
+
+### `/cni/<N>/`
+
+```json
+{
+    "files": "http://localhost:8000/api/v1/plugins/instances/3/files/",
+    "plugin_name": "cni-evaluator",
+    "plugin_version": "1.0.8",
+    "status": "finishedSuccessfully",
+    "summary": "{\"compute\": {\"return\": {\"l_logs\": [\"your stuff was evaluated\"], \"l_status\": [\"finishedSuccessfully\"], \"status\": true}, \"status\": true, \"submit\": {\"status\": true}}, \"pullPath\": {\"status\": true}, \"pushPath\": {\"status\": true}, \"status\": true, \"swiftPut\": {\"status\": true}}"
+}
+```
+
+`status` will be one of
+
+1. `waitingForPrevious`
+2. `scheduled`
+3. `started`
+4. `finishedSuccessfully`
+
+### User Workflow
+
+1. Register an account on the ChRIS store.
+2. Upload your plugin to the ChRIS store.
+3. TODO check progress at `GET /cni/<pluginId>/instances/`
+4. TODO download results from `GET /cni/<pluginId>/files/evaluation.tsv`
+
+#### User Example
+
+Literally the same usage as ChRIS store API.
+
+```bash
+http POST :8011/api/v1/users/ \
+  Content-Type:application/vnd.collection+json \
+  template:='{"data":
+      [{"name":"email","value":"alice@example.com"},
+      {"name":"username","value":"alice"},
+      {"name":"password","value":"alice12345"}]}'
+
+http -a alice:alice12345 -f POST :8011/api/v1/plugins/ \
+  dock_image=fnndsc/pl-simpledsapp:latest \
+  public_repo=https://github.com/FNNDSC/pl-simpledsapp \
+  descriptor_file@$PWD/SimpleDSApp.json \
+  name=try1
+```
+
 ## Preconditions
 
 Copy the SSH key of the system user who runs `server.js` onto the
@@ -36,13 +90,6 @@ box running CUBE in _docker_. Other CUBE deployment setups on PaaS
 3. Run `./prepare.sh` (depends on [`jq`](https://stedolan.github.io/jq/)
 4. `yarn`
 5. `yarn start`
-
-## User Workflow
-
-1. Register an account on the ChRIS store.
-2. Upload your plugin to the ChRIS store.
-3. TODO check progress at `GET /cni/<pluginId>/instances/`
-4. TODO download results from `GET /cni/<pluginId>/files/evaluation.tsv`
 
 ## Architecture
 
@@ -75,13 +122,13 @@ is automatically registered into ChRIS and scheduled to run in a feed.
   | (0) POST
   |     /api/v1/plugins/
   ▼
-+-----------------+  (3) uploadPlugin.sh        +------+
-|                 | --------------------------> |      |
-| cni-store-proxy |                             | CUBE |
-|                 |  (4) POST                   |      |
-|                 |      /api/v1/<N>/instances  |      |
-|                 | --------------------------> |      |
-+-----------------+                             +------+
++-----------------+  (3) uploadPlugin.sh         +------+
+|                 | ---------------------------> |      |
+| cni-store-proxy |                              | CUBE |
+|                 |  (4) POST                    |      |
+|                 |      /api/v1/<N>/instances/  |      |
+|                 | ---------------------------> |      |
++-----------------+                              +------+
   ▲
   | (1) 201
   |     Created
@@ -108,11 +155,11 @@ Requests are proxied transparently to CUBE, e.g.
   |     GET
   |     /cni/<pluginId>/instances/
   ▼
-+-----------------+  (2) "Transparent proxy"
-|                 |      GET
-| cni-store-proxy |      /api/v1/<M>/instances/  +------+
-|                 | ---------------------------> | CUBE |
-+-----------------+                              +------+
++-----------------+  (2) GET
+|                 |      /api/v1/<M>/instances/<M>/   +------+
+| cni-store-proxy | --------------------------------> | CUBE |
+|                 |                                   +------+
++-----------------+
   |
   | (1) "Authorization"
   |     GET /api/v1/
@@ -137,3 +184,7 @@ Requests are proxied transparently to CUBE, e.g.
 - https://github.com/FNNDSC/pl-cni_challenge
 - https://github.com/FNNDSC/ChRIS_ultron_backEnd/wiki/MICCAI-Work-Flow-(WIP)
 
+## TODO
+
+- Pagination of plugin searching. Currently, there is a limit of 50 submissions per account.
+- Tests

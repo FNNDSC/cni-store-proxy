@@ -6,6 +6,7 @@ const colors = require('colors');
 const print = require('./print');
 const Cube = require('./cube');
 const UploadDetector = require('./store');
+const SubmissionResultsProxy = require('./results');
 
 dotenv.config();
 dotenv.config({path: path.resolve(process.cwd(), 'parameters/plugins.env')});
@@ -20,6 +21,7 @@ const cube = new Cube(
 
 const app = express();
 const proxy = httpProxy.createProxyServer();
+const submissionResultsProxy = new SubmissionResultsProxy(cube, STORE_URL);
 
 app.post('/api/v1/plugins/', UploadDetector.validatePlugin);
 
@@ -28,6 +30,8 @@ app.all('/api/*', (req, res) => {
   print( colors.dim('--> ChRIS_store'), req);
   proxy.web(req, res, {target: STORE_URL});
 });
+
+app.get('/cni/:id(\\d+)/:tail(*)', (req, res) => submissionResultsProxy.cubeImpersonation(req, res));
 
 let fsInstanceId = null;
 
