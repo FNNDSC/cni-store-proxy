@@ -1,20 +1,35 @@
 #!/bin/bash
 
-source_dir=$(dirname "$(readlink -f "$0")")
-ENV="${ENV:-$source_dir/.env}"
+config_json=$(node <<< 'console.log(JSON.stringify(require("./src/config")))')
 
-if [ -f "$ENV" ]; then
-  source $ENV
-fi
+function get_config () {
+  echo $config_json | jq -r "$1"
+}
 
-if [ -f "$source_dir/parameters/plugins.env" ]; then
-  source $source_dir/parameters/plugins.env
-fi
+CUBE_URL=$(get_config '.cube.url')
+CUBE_USERNAME=$(get_config '.cube.username')
+CUBE_PASSWORD=$(get_config '.cube.password')
+CUBE_EMAIL=$(get_config '.cube.email')
+STORE_URL=$(get_config '.chrisStore.url')
+STORE_USERNAME=$(get_config '.chrisStore.username')
+STORE_PASSWORD=$(get_config '.chrisStore.password')
+STORE_EMAIL=$(get_config '.chrisStore.email')
+
+FS_PLUGIN_DOCKER=$(get_config '.plugins.fs.docker')
+FS_PLUGIN_NAME=$(get_config '.plugins.fs.name')
+FS_PLUGIN_REPO=$(get_config '.plugins.fs.repo')
+EVALUATOR_DOCKER=$(get_config '.plugins.evaluator.docker')
+EVALUATOR_NAME=$(get_config '.plugins.evaluator.name')
+EVALUATOR_REPO=$(get_config '.plugins.evaluator.repo')
+
+FEED_NAME=$(get_config '.feed.name')
+FEED_DESCRIPTION=$(get_config '.feed.description')
+CNI_FS_ARGS=$(get_config '.runArgs.fs | tostring')
 
 CUBE_AUTH="$CUBE_USERNAME:$CUBE_PASSWORD"
 STORE_AUTH="$STORE_USERNAME:$STORE_PASSWORD"
 
-if ! docker exec $CUBE_CONTAINER /bin/true; then
+if [ -k CNI_CUBE_CONTAINER ] && ! docker exec $CNI_CUBE_CONTAINER /bin/true; then
   echo CUBE_CONTAINER is not correct
   echo Did nothing.
   exit 1
@@ -45,7 +60,7 @@ function create_user () {
 }
 
 create_user "$CUBE_URL" "$CUBE_EMAIL" "$CUBE_USERNAME" "$CUBE_PASSWORD"
-create_user "$REAL_STORE_URL" "$STORE_EMAIL" "$STORE_USERNAME" "$STORE_PASSWORD"
+create_user "$STORE_URL" "$STORE_EMAIL" "$STORE_USERNAME" "$STORE_PASSWORD"
 
 # ========================================
 # upload FS and evaluator plugins
@@ -61,16 +76,15 @@ function upload_plugin () {
   docker pull -q $dock_image > /dev/null
   local script=$(docker inspect --format '{{ (index .Config.Cmd 0) }}' $dock_image)
 
-  local tmpdir=$(mktemp -d -t chris-$(date +%H%M%S)-XXXXXXXXX)
-  docker run -v $tmpdir:/j --rm -u $(id -u) $dock_image $script --savejson /j
-  local descriptor_file=$(echo $tmpdir/*.json)
-  curl -so /dev/null -u "$STORE_AUTH" "$REAL_STORE_URL/api/v1/plugins/" \
+  local descriptor_file=$(mktemp --suffix=.json)
+  docker run --rm $dock_image $script --json > $descriptor_file
+  curl -so /dev/null -u "$STORE_AUTH" "$STORE_URL/api/v1/plugins/" \
     -F "name=$plugin_name" \
     -F "dock_image=$dock_image"  \
     -F "descriptor_file=@$descriptor_file" \
     -F "public_repo=$repo"
   ./plugin2cube.sh $plugin_name
-  rm -r $tmpdir
+  rm $descriptor_file
 }
 
 upload_plugin $FS_PLUGIN_DOCKER $FS_PLUGIN_NAME $FS_PLUGIN_REPO
@@ -86,7 +100,7 @@ search_results=$(
   curl -s -u "$CUBE_AUTH" "$CUBE_URL/api/v1/plugins/search/?name=$FS_PLUGIN_NAME" \
     -H 'Accept: application/json'
 )
-instances_url="$(echo $search_results | jq -r .results[0].instances)"
+instances_url="$(echo $search_results | jq -r '.results[0].instances')"
 
 # ========================================
 # create feed
@@ -96,7 +110,7 @@ start_run="$(
 curl -s -u "$CUBE_AUTH" "$instances_url" \
   -H 'Content-Type: application/vnd.collection+json' \
   -H 'Accept: application/json' \
-  --data "{\"template\":$(< $source_dir/parameters/fs.json)}"
+  --data "{\"template\":$CNI_FS_ARGS}"
 )"
 
 # ========================================

@@ -1,13 +1,6 @@
 const print = require('./print');
 const colors = require('colors');
 
-// read plugin configuration
-const dotenv = require('dotenv');
-const path = require('path');
-dotenv.config({path: path.resolve(process.cwd(), 'parameters/plugins.env')});
-const SUBMISSION_RUN_CONFIGURATION = require('../parameters/submission.json');
-const EVALUATOR_RUN_CONFIGURATION = require('../parameters/evaluator.json');
-
 /**
  * UploadDetector connects the proxy server in front of ChRIS_store with CUBE
  * and handles automatic registration and feed creation for submitted plugins.
@@ -17,9 +10,12 @@ class UploadDetector {
    * @param cube CUBE connection
    * @param feedId ID of which feed in CUBE which to run submissions under
    */
-  constructor(cube, feedId) {
+  constructor(cube, feedId, evaluatorName, submissionRunData, evaluatorRunData) {
     this.cube = cube;
     this.feedId = feedId;
+    this.evaluatorName = evaluatorName;
+    this.submissionRunData = submissionRunData;
+    this.evaluatorRunData = evaluatorRunData;
   }
 
   /**
@@ -42,8 +38,8 @@ class UploadDetector {
    */
   async runSubmission(pluginName) {
     print(`creating feed for "${pluginName}"`);
-    const feedInfo = await this.cube.createFeed(pluginName, SUBMISSION_RUN_CONFIGURATION, this.feedId);
-    await this.cube.createFeed(process.env.EVALUATOR_NAME, EVALUATOR_RUN_CONFIGURATION, feedInfo.id);
+    const feedInfo = await this.cube.createFeed(pluginName, this.submissionRunData, this.feedId);
+    await this.cube.createFeed(this.evaluatorName, this.evaluatorRunData, feedInfo.id);
   }
 
   /**

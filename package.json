@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "serve": "node src/server.js",
-    "postinstall": "git submodule update --init && [ -e .env ] || ln -sv cube/local.env .env",
+    "postinstall": "[ -d cube ] || exit 0 && git submodule update --init && [ -e .env ] || ln -sv cube/local.env .env",
     "prestart": "yarn -s run cube:check || ( yarn run cube:up && ./prepare.sh )",
     "start": "yarn run serve",
     "cube:up": "cube/minimake/minimake.sh",

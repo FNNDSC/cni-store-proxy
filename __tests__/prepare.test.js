@@ -1,19 +1,20 @@
 const Cube = require('../src/cube');
+const config = require('../src/config');
 
 const cube = new Cube(
-  process.env.CUBE_URL,
-  process.env.CUBE_USERNAME,
-  process.env.CUBE_PASSWORD
+  config.cube.url,
+  config.cube.username,
+  config.cube.password
 );
 
 describe('prepare', () => {
   test('should have created a feed', async () => {
-    const feed = await cube.searchFeed(process.env.FEED_NAME);
+    const feed = await cube.searchFeed(config.feed.name);
     expect(feed).toBeDefined();
     expect(feed.plugin_instances).toBeDefined();
     const pi = await cube.get({ url: feed.plugin_instances });
     expect(pi).toBeDefined();
     expect(pi.results).toHaveLength(1);
-    expect(pi.results[0].plugin_name).toBe(process.env.FS_PLUGIN_NAME);
+    expect(pi.results[0].plugin_name).toBe(config.plugins.fs.name);
   });
 });

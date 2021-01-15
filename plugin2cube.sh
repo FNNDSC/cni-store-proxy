@@ -14,14 +14,8 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-ENV="${ENV:-$(dirname "$(readlink -f "$0")")/.env}"
-
-if [ -f "$ENV" ]; then
-  source $ENV
-fi
-
 set -e
-docker exec "${CUBE_CONTAINER:-chris}" python plugins/services/manager.py \
+docker exec "${CNI_CUBE_CONTAINER:-chris}" python plugins/services/manager.py \
   register "${2:-host}" --pluginname "$1"
 
 # to verify registration is correct

@@ -63,14 +63,14 @@ class Cube {
    * Or it can be specified as a positive integer to append node to existing feed (DS plugin).
    *
    * @param pluginName name of plugin to run
-   * @param runConfiguration arguments to run plugin with
+   * @param runData arguments to run plugin with
    * @param previousId if given, new (DS plugin) node is appended to the ID
    * @return {Promise} response from CUBE after feed creation
    */
-  async createFeed(pluginName, runConfiguration, previousId) {
+  async createFeed(pluginName, runData, previousId) {
     if (Number.isInteger(previousId)) {
       previousId = { name: 'previous_id', value: previousId };
-      runConfiguration = [...runConfiguration, previousId];
+      runData = [...runData, previousId];
     }
     const url = (await this.searchPlugin(pluginName)).instances;
     printTx('POST', url);
@@ -78,7 +78,7 @@ class Cube {
       url,
       {
         template: {
-          data: runConfiguration
+          data: runData
         }
       },
       {
