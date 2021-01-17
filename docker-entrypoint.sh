@@ -71,9 +71,6 @@ if [ -z "$CNI_PREPRARED" ]; then
     < $1
   }
 
-  # preprare CUBE for the CNI challenge
-  ./prepare.sh
-
   touch ~/cni-backend/is-prepared
 else
   echo "Skipping preparation and restarting cni-store-proxy"
@@ -93,6 +90,9 @@ fi
 if [ -z "$CHRISSTORE_PASSWORD" ]; then
   export CHRISSTORE_PASSWORD="$(load_password ~/cni-backend/chrisstore_password)"
 fi
+
+  # preprare CUBE for the CNI challenge
+  ./prepare.sh
 
 # ========================================
 # start the CNI backend application server
