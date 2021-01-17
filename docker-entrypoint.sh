@@ -3,8 +3,25 @@
 # forward termination signals to children
 trap 'kill -s TERM $(jobs -p)' TERM INT
 
+# whenever a child dies, we want to kill the parent too
+# so that all children are killed together.
+# that way the container shuts down in unison on failure
+# and the restart policy can be managed by docker.
+
+function basket () {
+  # caveat: subshell doesn't catch kill signals itself
+  ( $@ ; kill $$ ) &
+}
+
+# if this script has been run before, we should skip initialization steps
+if [ -f ~/cni-backend/is-prepared ]; then
+  CNI_PREPRARED=y
+else
+  mkdir ~/cni-backend
+fi
+
 # patch CUBE to use a different job IDs for pman
-if [ -n "$CUBE_JID_PREFIX" ]; then
+if [ -z "$CNI_PREPRARED" ] && [ -n "$CUBE_JID_PREFIX" ]; then
   sed -i "s/chris-jid-/$CUBE_JID_PREFIX/" $APPROOT/plugininstances/services/manager.py
 fi
 
@@ -13,16 +30,16 @@ fi
 # ========================================
 
 cd $APPROOT
-/usr/src/docker-entrypoint.sh mod_wsgi-express start-server \
+basket /usr/src/docker-entrypoint.sh mod_wsgi-express start-server \
   config/wsgi.py --host 0.0.0.0 --port 8000 --processes 8 \
-  --server-root /home/localuser/mod_wsgi-0.0.0.0:8000 &
+  --server-root /home/localuser/mod_wsgi-0.0.0.0:8000
 cd - > /dev/null
 
 # ========================================
 # wait for CUBE to come online
 # ========================================
 
-echo "before CNI preparation, waiting for CUBE..."
+echo "Before CNI preparation, waiting for CUBE..."
 
 for i in {0..60}; do
   curl -s http://localhost:8000/api/v1/users/ | grep -q username \
@@ -40,39 +57,53 @@ fi
 # setup and preparation
 # ========================================
 
-CNI_COMPUTE_ENV=${CNI_COMPUTE_ENV:-host}
-python $APPROOT/plugins/services/manager.py add \
-  $CNI_COMPUTE_ENV "http://pfcon.local:5005" \
-  --description "Compute environment used for CNI challenge submissions and evaluation"
+if [ -z "$CNI_PREPRARED" ]; then
+  CNI_COMPUTE_ENV=${CNI_COMPUTE_ENV:-host}
+  python $APPROOT/plugins/services/manager.py add \
+    $CNI_COMPUTE_ENV "http://pfcon.local:5005" \
+    --description "Compute environment used for CNI challenge submissions and evaluation"
 
-# configure plugin registration for cohosted CUBE
-cat > plugin2cube.sh << EOF
-#!/bin/sh -e
-python $APPROOT/plugins/services/manager.py \
-  register "$CNI_COMPUTE_ENV" --pluginname "\$1"
-EOF
+  # configure plugin registration for cohosted CUBE
+  cat  > plugin2cube.sh <<< '#!/bin/sh -e'
+  cat >> plugin2cube.sh <<< "python $APPROOT/plugins/services/manager.py register "$CNI_COMPUTE_ENV" --pluginname \$1"
 
-# set passwords
-function generate_password () {
-  head /dev/urandom | tr -dc A-Za-z0-9 | head -c "${1:-60}"
-}
+  # If a file exists, then read it.
+  # Else fill it with random data and return that data.
+  function load_password () {
+    if [ ! -f "$1" ]; then
+      head /dev/urandom | tr -dc A-Za-z0-9 | head -c 60 > $1
+    fi
+    < $1
+  }
+
+  # preprare CUBE for the CNI challenge
+  ./prepare.sh
+
+  touch ~/cni-backend/is-prepared
+else
+  echo "Skipping preparation and restarting cni-store-proxy"
+
+  # if password files are needed then they would have already been created
+  function load_password () {
+    < $1 || \
+      echo "$1 missing, system is compromised" \
+      exit 1
+  }
+fi
 
 if [ -z "$CUBE_PASSWORD" ]; then
-  export CUBE_PASSWORD="$(generate_password)"
+  export CUBE_PASSWORD="$(load_password ~/cni-backend/cube_password)"
 fi
 
 if [ -z "$CHRISSTORE_PASSWORD" ]; then
-  export CUBE_PASSWORD="$(generate_password)"
+  export CHRISSTORE_PASSWORD="$(load_password ~/cni-backend/chrisstore_password)"
 fi
-
-# preprare CUBE for the CNI challenge
-./prepare.sh
 
 # ========================================
 # start the CNI backend application server
 # ========================================
 
-yarnpkg run serve &
+basket yarnpkg run serve
 
 # don't end script because servers are running in the background
 wait
