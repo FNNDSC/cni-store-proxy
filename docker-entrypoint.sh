@@ -89,8 +89,8 @@ if [ -z "$CHRISSTORE_PASSWORD" ]; then
   export CHRISSTORE_PASSWORD="$(load_password ~/cni-backend/chrisstore_password)"
 fi
 
-# preprare CUBE for the CNI challenge
-./preprare.sh
+# prepare CUBE for the CNI challenge
+./prepare.sh
 
 if [ "$?" = "0" ]; then
   touch ~/cni-backend/is-prepared
