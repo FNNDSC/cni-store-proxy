@@ -9,7 +9,7 @@ const app = express();
 
 if (process.env.CNI_BACKEND_CORS) {
   const cors = require('cors');
-  app.use(cors({ origin: process.env.CNI_CORS }));
+  app.use(cors({ origin: process.env.CNI_BACKEND_CORS }));
 }
 
 if (process.env.CNI_BACKEND_TRUST_PROXY) {
