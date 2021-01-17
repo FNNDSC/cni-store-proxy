@@ -90,13 +90,14 @@ if [ -z "$CHRISSTORE_PASSWORD" ]; then
 fi
 
 # prepare CUBE for the CNI challenge
-./prepare.sh
-
-if [ "$?" = "0" ]; then
-  touch ~/cni-backend/is-prepared
-else
-  echo "CNI backend preparation failed."
-  exit 1
+if [ -z "$CNI_PREPRARED" ]; then
+  ./prepare.sh
+  if [ "$?" = "0" ]; then
+    touch ~/cni-backend/is-prepared
+  else
+    echo "CNI backend preparation failed."
+    exit 1
+  fi
 fi
 
 # ========================================
