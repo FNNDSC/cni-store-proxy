@@ -15,7 +15,6 @@ services:
       - ./secrets/.chris_db.env
       - ./secrets/.swift_service.env
     ports:
-      - "127.0.0.1:8000:8000"
       - "127.0.0.1:8011:8011"
     depends_on:
       - chris_db
@@ -74,12 +73,12 @@ services:
 
   chris_store:
     image: fnndsc/chris_store:latest
+    environment:
+      DJANGO_USE_X_FORWARDED_HOST: "true"
     env_file:
       - ./secrets/.chris_store.env
       - ./secrets/.chris_store_db.env
       - ./secrets/.swift_service.env
-    ports:
-      - "127.0.0.1:8010:8010"
     depends_on:
       - chris_store_db
       - swift
