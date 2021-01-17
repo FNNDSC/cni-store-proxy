@@ -1,0 +1,10 @@
+minimake/
+__tests__
+
+.idea/
+.github/
+
+node_modules/
+yarn-error.log
+
+secrets/

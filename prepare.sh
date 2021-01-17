@@ -1,6 +1,10 @@
 #!/bin/bash
 
-config_json=$(node <<< 'console.log(JSON.stringify(require("./src/config")))')
+# ========================================
+# setup
+# ========================================
+
+config_json=$(node -p 'JSON.stringify(require("./src/config"))')
 
 function get_config () {
   echo $config_json | jq -r "$1"
@@ -29,9 +33,54 @@ CNI_FS_ARGS=$(get_config '.runArgs.fs | tostring')
 CUBE_AUTH="$CUBE_USERNAME:$CUBE_PASSWORD"
 STORE_AUTH="$STORE_USERNAME:$STORE_PASSWORD"
 
+# ========================================
+# get plugin representations
+# ========================================
+
+function pull_image_if_needed () {
+  local dock_image=$1
+  local variable_name=$2
+  local descriptor_file="${!variable_name}"
+
+  if [ -f "$descriptor_file" ]; then
+    return 0
+  elif ! docker version > /dev/null; then
+    >&2 echo "error: $variable_name not specified, and cannot use docker"
+    exit 1
+  else
+    >&2 echo "warning: pulling docker image for $dock_image"
+  fi
+
+  local script=$(docker inspect --format '{{ (index .Config.Cmd 0) }}' $dock_image)
+
+  descriptor_file=$(mktemp --suffix=.json)
+  docker run --rm $dock_image $script --json > $descriptor_file
+  eval "export $variable_name=$descriptor_file"
+}
+
+pull_image_if_needed $FS_PLUGIN_DOCKER FS_PLUGIN_FILE
+pull_image_if_needed $EVALUATOR_DOCKER EVALUATOR_FILE
+
+# ========================================
+# check if preparation is needed, or has already been done
+# ========================================
+
+check_feed=$(
+  curl -s "$CUBE_URL/api/v1/search/?name=$(node -p "encodeURIComponent('$FEED_NAME')")" \
+    -u "$CUBE_AUTH" -H "Accept: application/json"
+)
+
+num_results=$(echo $check_feed | jq .count)
+if [ "$num_results" != "null" ] && [ "$num_results" -ge "1" ]; then
+  >&2 echo "Already found feed with name \"$FEED_NAME\""
+  >&2 echo "creation_date: $(echo $check_feed | jq -r '.results[0].creation_date')"
+  echo "$(echo $check_feed | jq -r .results[0].url)"
+  exit 0
+fi
+
 if [ -k CNI_CUBE_CONTAINER ] && ! docker exec $CNI_CUBE_CONTAINER /bin/true; then
-  echo CUBE_CONTAINER is not correct
-  echo Did nothing.
+  >&2 echo CUBE_CONTAINER is not correct
+  >&2 echo Did nothing.
   exit 1
 fi
 
@@ -66,29 +115,17 @@ create_user "$STORE_URL" "$STORE_EMAIL" "$STORE_USERNAME" "$STORE_PASSWORD"
 # upload FS and evaluator plugins
 # ========================================
 
-# 1. get plugin JSON
-# 2. upload to Store
-# 3. register to CUBE
 function upload_plugin () {
-  local dock_image=$1
-  local plugin_name=$2
-  local repo=$3
-  docker pull -q $dock_image > /dev/null
-  local script=$(docker inspect --format '{{ (index .Config.Cmd 0) }}' $dock_image)
-
-  local descriptor_file=$(mktemp --suffix=.json)
-  docker run --rm $dock_image $script --json > $descriptor_file
   curl -so /dev/null -u "$STORE_AUTH" "$STORE_URL/api/v1/plugins/" \
-    -F "name=$plugin_name" \
-    -F "dock_image=$dock_image"  \
-    -F "descriptor_file=@$descriptor_file" \
-    -F "public_repo=$repo"
-  ./plugin2cube.sh $plugin_name
-  rm $descriptor_file
+    -F "name=$2" \
+    -F "dock_image=$1"  \
+    -F "descriptor_file=@$4" \
+    -F "public_repo=$3"
+  ./plugin2cube.sh $2
 }
 
-upload_plugin $FS_PLUGIN_DOCKER $FS_PLUGIN_NAME $FS_PLUGIN_REPO
-upload_plugin $EVALUATOR_DOCKER $EVALUATOR_NAME $EVALUATOR_REPO
+upload_plugin $FS_PLUGIN_DOCKER $FS_PLUGIN_NAME $FS_PLUGIN_REPO $FS_PLUGIN_FILE
+upload_plugin $EVALUATOR_DOCKER $EVALUATOR_NAME $EVALUATOR_REPO $EVALUATOR_FILE
 
 
 # ========================================

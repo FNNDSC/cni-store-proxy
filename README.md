@@ -132,11 +132,13 @@ box running CUBE in _docker_. Other CUBE deployment setups on PaaS
 
 ## Development
 
-1. Start [ChRIS_ultron_backEnd](https://github.com/FNNDSC/ChRIS_ultron_backEnd): `./make.sh` or `./docker-deploy.sh`
-2. Set `.env`
-3. Run `./prepare.sh` (depends on [`jq`](https://stedolan.github.io/jq/)
-4. `yarn`
-5. `yarn start`
+`yarn` scripts in `package.json` are meant for ease of development where
+this node.js application is run on-the-metal and CUBE is run in a development-mode.
+
+Dependencies: `git nodejs yarn docker docker-compose`
+
+1. `yarn`
+2. `yarn start`
 
 ## Architecture
 
@@ -159,7 +161,6 @@ Typically, requests to `/api/v1/cmd` are forwarded verbatim to `https://chrissto
 The proxy listens for a `201 Created` response from `/api/v1/plugins/`.
 This means a plugin was uploaded successfully into the ChRIS store. The plugin
 is automatically registered into ChRIS and scheduled to run in a feed.
-
 
 ```
 +------+
@@ -220,12 +221,6 @@ Requests are proxied transparently to CUBE, e.g.
 +-------------+
 ```
 
-## Production
-
-- Set `.env`
-- Non-local CUBE necessitates a custom implementation of `plugin2cube.sh`
-- If behind a reverse-proxy, set `CNI_BACKEND_TRUST_PROXY=y`
-
 ## Resources
 
 - http://fnndsc.childrens.harvard.edu/cnichallenge/
@@ -236,3 +231,48 @@ Requests are proxied transparently to CUBE, e.g.
 
 - Pagination of plugin searching. Currently, there is a limit of 50 submissions per account.
 - Tests
+
+## Production
+
+Tip: If behind a reverse-proxy, set `CNI_BACKEND_TRUST_PROXY=y`
+
+Single-machine deployment can be orchestrated by `docker-compose`.
+
+`cni-store-proxy` needs special administrative access to CUBE because
+plugins cannot be registered over an HTTP API. As a workaround,
+`cni-store-proxy` and CUBE run in the same container so that
+`cni-store-proxy` can directly invoke
+`python plugins/services/manager.py`.
+
+1. Create internally-used backend secrets:
+https://github.com/FNNDSC/ChRIS_ultron_backEnd/wiki/ChRIS-backend-production-services-secret-configuration-files
+2. Generate JSON representations for your fs and evaluator plugins and set `FS_PLUGIN_FILE` and `EVALUATOR_FILE` accordingly.
+
+```bash
+docker run -u $(id -u) -v $PWD/secrets:/json --rm sandip117/pl-test_data_generator test_data_generator.py --savejson /json
+docker run -u $(id -u) -v $PWD/secrets:/json --rm aiwc/cni_challenge_evaluation cni_challenge_evaluation.py --savejson /json
+```
+
+Start everything:
+
+```bash
+docker swarm init --advertise-addr=127.0.0.1
+docker-compose up
+```
+
+If `CNI_COMPUTE_ENV` is not host, then you will need to change the address of `pfcon`
+in http://localhost:8000/chris-admin/ or run
+
+```bash
+docker-compose exec cni-and-cube python plugins/services/manager.py modify $CNI_COMPUTE_ENV --url http://somewhere.else:5005
+```
+
+After `cni-store-proxy` comes online
+
+```bash
+until curl -s 'http://localhost:8011/api/v1/users/ | grep -q username'; do
+  sleep 5;
+done
+```
+
+Everything will be ready to go.

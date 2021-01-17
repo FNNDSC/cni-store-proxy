@@ -1,0 +1,164 @@
+version: '3.7'
+
+services:
+  cni-and-cube:
+    image: fnndsc/cni-store-proxy:and-cube
+    volumes:
+      # - ./prepare.sh:/app/prepare.sh:ro
+      # - ./docker-entrypoint.sh:/app/docker-entrypoint.sh:ro
+      - ./secrets/Test_data_generator.json:/etc/chris-plugins/Test_data_generator.json:ro
+      - ./secrets/cni_challenge_evaluation.json:/etc/chris-plugins/cni_challenge_evaluation.json:ro
+    environment:
+      CUBE_JID_PREFIX: "cni-challenge-"
+      CNI_COMPUTE_ENV: host
+      FS_PLUGIN_FILE: /etc/chris-plugins/Test_data_generator.json
+      EVALUATOR_FILE: /etc/chris-plugins/cni_challenge_evaluation.json
+    env_file:
+      - ./secrets/.chris.env
+      - ./secrets/.chris_db.env
+      - ./secrets/.swift_service.env
+    ports:
+      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8011:8011"
+    depends_on:
+      - chris_db
+      - swift
+      - queue
+      - chris_store
+      - pfcon
+    restart: on-failure
+    networks:
+      - local
+  worker:
+    image: fnndsc/chris
+    entrypoint: ''
+    command: celery -A core worker -c 4 -l info -Q main
+    env_file:
+      - ./secrets/.chris.env
+      - ./secrets/.chris_db.env
+      - ./secrets/.swift_service.env
+    depends_on:
+      - chris_db
+      - swift
+      - queue
+      - pfcon
+    restart: on-failure
+    networks:
+      - local
+  scheduler:
+    image: fnndsc/chris
+    entrypoint: ''
+    command: celery -A core beat -l info --pidfile /home/localuser/celerybeat.pid --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file:
+      - ./secrets/.chris.env
+      - ./secrets/.chris_db.env
+      - ./secrets/.swift_service.env
+    depends_on:
+      - chris_db
+      - swift
+      - queue
+    restart: on-failure
+    networks:
+      - local
+  queue:
+    image: rabbitmq:3
+    restart: on-failure
+    networks:
+      - local
+  chris_db:
+    image: mysql:5
+    volumes:
+      - chris_db_data:/var/lib/mysql
+    env_file:
+      - ./secrets/.chris_db.env
+    restart: on-failure
+    networks:
+      - local
+
+  chris_store:
+    image: fnndsc/chris_store:latest
+    env_file:
+      - ./secrets/.chris_store.env
+      - ./secrets/.chris_store_db.env
+      - ./secrets/.swift_service.env
+    ports:
+      - "127.0.0.1:8010:8010"
+    depends_on:
+      - chris_store_db
+      - swift
+    restart: on-failure
+    networks:
+      local:
+        aliases:
+          - chris-store.local
+  chris_store_db:
+    image: mysql:5
+    volumes:
+      - chris_store_db_data:/var/lib/mysql
+    env_file:
+      - ./secrets/.chris_store_db.env
+    restart: on-failure
+    networks:
+      - local
+
+  swift:
+    image: fnndsc/docker-swift-onlyone:latest
+    init: true
+    volumes:
+      - swift_storage:/srv
+    env_file:
+      - ./secrets/.swift_service.env
+    restart: on-failure
+    networks:
+      local:
+        aliases:
+          - swift_service
+
+  pfcon:
+    image: fnndsc/pfcon:latest
+    command: ["--forever", "--httpResponse", "--verbosity", "1"]
+    env_file:
+      - ./secrets/.swift_service.env
+    depends_on:
+      - swift
+      - pman
+      - pfioh
+    restart: on-failure
+    networks:
+      local:
+        aliases:
+          - pfcon.local
+          - pfcon_service
+  pfioh:
+    image: fnndsc/pfioh:latest
+    command: ["--forever", "--httpResponse", "--createDirsAsNeeded", "--storeBase", "/hostFS/storeBase", "--verbosity", "1"]
+    volumes:
+      - pfioh-remote:/hostFS/storeBase
+    restart: on-failure
+    networks:
+      local:
+        aliases:
+          - pfioh_service
+  pman:
+    image: fnndsc/pman:latest
+    environment:
+      - PMAN_DOCKER_VOLUME=cni-pfioh-remote
+    command: ["--rawmode", "1", "--http", "--port", "5010", "--listeners", "12"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - pfioh-remote:/hostFS/storeBase
+    restart: on-failure
+    networks:
+      local:
+        aliases:
+          - pman_service
+
+networks:
+  local:
+
+volumes:
+  chris_db_data:
+  chris_store_db_data:
+  swift_storage:
+  pfioh-remote:
+    name: cni-pfioh-remote
