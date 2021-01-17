@@ -75,7 +75,7 @@ else
 
   # if password files are needed then they would have already been created
   function load_password () {
-    < $1 || \
+    cat $1 || \
       echo "$1 missing, system is compromised" \
       exit 1
   }
