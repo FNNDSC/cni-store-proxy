@@ -7,7 +7,7 @@
     "serve": "node src/server.js",
     "postinstall": "which docker > /dev/null || exit 0 && git submodule update --init",
     "prestart": "yarn -s run cube:check || ( yarn run cube:up && ./prepare.sh )",
-    "start": "yarn run serve",
+    "start": "CNI_BACKEND_CORS='*' yarn run serve",
     "cube:up": "minimake/minimake.sh",
     "cube:down": "minimake/unmake.sh",
     "cube:restart": "yarn run cube:down && yarn run cube:up",
@@ -17,7 +17,9 @@
     "posttest": "yarn run cube:down"
   },
   "jest": {
-    "testMatch": [ "<rootDir>/__tests__/**/*.test.js" ],
+    "testMatch": [
+      "<rootDir>/__tests__/**/*.test.js"
+    ],
     "globalSetup": "<rootDir>/__tests__/setup.js"
   },
   "repository": "https://github.com/fnndsc/cni-store-proxy",
@@ -27,6 +29,7 @@
   "dependencies": {
     "axios": "^0.19.2",
     "colors": "^1.4.0",
+    "cors": "^2.8.5",
     "express": "^4.17.1",
     "http-proxy": "^1.18.1"
   },

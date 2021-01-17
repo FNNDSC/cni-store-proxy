@@ -13,12 +13,8 @@ const cube = new Cube(
   config.cube.password
 );
 
-const app = express();
+const app = express.Router();
 const proxy = httpProxy.createProxyServer();
-
-if (process.env.CNI_BACKEND_TRUST_PROXY) {
-  app.enable('trust proxy');
-}
 
 app.post('/api/v1/plugins/', UploadDetector.validatePlugin);
 
