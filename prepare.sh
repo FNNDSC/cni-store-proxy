@@ -47,8 +47,8 @@ function pull_image_if_needed () {
   elif ! docker version > /dev/null; then
     >&2 echo "error: $variable_name not specified, and cannot use docker"
     exit 1
-  else
-    >&2 echo "warning: pulling docker image for $dock_image"
+  elif [ -z "$(docker images --format '{{.ID}}' $dock_image)" ]; then
+    >&2 docker pull $dock_image
   fi
 
   local script=$(docker inspect --format '{{ (index .Config.Cmd 0) }}' $dock_image)
