@@ -4,12 +4,9 @@ services:
   cni-and-cube:
     image: fnndsc/cni-store-proxy:and-cube
     volumes:
-      # - ./prepare.sh:/app/prepare.sh:ro
-      # - ./docker-entrypoint.sh:/app/docker-entrypoint.sh:ro
       - ./secrets/Test_data_generator.json:/etc/chris-plugins/Test_data_generator.json:ro
       - ./secrets/cni_challenge_evaluation.json:/etc/chris-plugins/cni_challenge_evaluation.json:ro
     environment:
-      CUBE_JID_PREFIX: "cni-challenge-"
       CNI_COMPUTE_ENV: host
       FS_PLUGIN_FILE: /etc/chris-plugins/Test_data_generator.json
       EVALUATOR_FILE: /etc/chris-plugins/cni_challenge_evaluation.json

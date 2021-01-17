@@ -20,11 +20,6 @@ else
   mkdir ~/cni-backend
 fi
 
-# patch CUBE to use a different job IDs for pman
-if [ -z "$CNI_PREPRARED" ] && [ -n "$CUBE_JID_PREFIX" ]; then
-  sed -i "s/chris-jid-/$CUBE_JID_PREFIX/" $APPROOT/plugininstances/services/manager.py
-fi
-
 # ========================================
 # start CUBE in the background
 # ========================================
