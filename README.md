@@ -190,9 +190,9 @@ is automatically registered into ChRIS and scheduled to run in a feed.
 Endpoints under `/cni/*` are authenticated against ChRIS_store.
 Requests are proxied transparently to CUBE, e.g.
 
-- `cni.chrisproject.org/cni/3/instances/` --> `cube.chrisproject.org/api/v1/plugins/instances/5/` (is the job done running? where are the files?)
-- `cni.chrisproject.org/cni/3/instances/files?limit=500&offset=0` --> `cube.chrisproject.org/api/v1/plugins/instances/5/files/?limit=500&offset=0` (list files)
-- `cni.chrisproject.org/cni/3/files/result.csv` --> `cube.chrisproject.org/api/v1/files/396/result.csv` (download an output file)
+- `cni.chrisproject.org/cni/3/` --> `cube.chrisproject.org/api/v1/plugins/instances/5/` (is the job done running? where are the files?)
+- `cni.chrisproject.org/cni/3/files/?limit=500&offset=0` --> `cube.chrisproject.org/api/v1/plugins/instances/5/files/?limit=500&offset=0` (list files)
+- `cni.chrisproject.org/cni/3/files/300/result.csv` --> `cube.chrisproject.org/api/v1/files/396/result.csv` (download an output file)
 
 ```
 +------+
@@ -201,7 +201,7 @@ Requests are proxied transparently to CUBE, e.g.
   |
   | (0) "Request"
   |     GET
-  |     /cni/<pluginId>/instances/
+  |     /cni/<pluginId>/
   ▼
 +-----------------+  (2) GET
 |                 |      /api/v1/<M>/instances/<M>/   +------+
@@ -223,9 +223,9 @@ Requests are proxied transparently to CUBE, e.g.
 
 ## Resources
 
-- http://fnndsc.childrens.harvard.edu/cnichallenge/
+- https://cni.chrisproject.org/
 - https://github.com/FNNDSC/pl-cni_challenge
-- https://github.com/FNNDSC/ChRIS_ultron_backEnd/wiki/MICCAI-Work-Flow-(WIP)
+- https://github.com/FNNDSC/CHRIS_docs/blob/master/workflows/MICCAI-Workflow.md
 
 ## TODO
 
@@ -233,8 +233,6 @@ Requests are proxied transparently to CUBE, e.g.
 - Tests
 
 ## Production
-
-Tip: If behind a reverse-proxy, set `CNI_BACKEND_TRUST_PROXY=y`
 
 Single-machine deployment can be orchestrated by `docker-compose`.
 
@@ -276,3 +274,5 @@ done
 ```
 
 Everything will be ready to go.
+
+Tip: If behind a reverse-proxy, set `CNI_BACKEND_TRUST_PROXY=y`
