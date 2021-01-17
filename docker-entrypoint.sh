@@ -36,11 +36,11 @@ cd - > /dev/null
 
 echo "Before CNI preparation, waiting for CUBE..."
 
-for i in {0..60}; do
+for i in {0..120}; do
   curl -s http://localhost:8000/api/v1/users/ | grep -q username \
     && curl -s        $CHRIS_STORE_URL/users/ | grep -q username \
     && online=y && break
-  sleep 2
+  sleep 5
 done
 
 if [ -z "$online" ]; then
