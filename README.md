@@ -246,6 +246,8 @@ plugins cannot be registered over an HTTP API. As a workaround,
 https://github.com/FNNDSC/ChRIS_ultron_backEnd/wiki/ChRIS-backend-production-services-secret-configuration-files
 2. Generate JSON representations for your fs and evaluator plugins and set `FS_PLUGIN_FILE` and `EVALUATOR_FILE` accordingly.
 
+**For ChRIS_store (in `secrets/.chris_store.env`) `DJANGO_USE_X_FORWARDED_HOST=true` should be set.**
+
 ```bash
 docker run -u $(id -u) -v $PWD/secrets:/json --rm sandip117/pl-test_data_generator test_data_generator.py --savejson /json
 docker run -u $(id -u) -v $PWD/secrets:/json --rm aiwc/cni_challenge_evaluation cni_challenge_evaluation.py --savejson /json
