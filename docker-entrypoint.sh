@@ -68,7 +68,7 @@ if [ -z "$CNI_PREPRARED" ]; then
     if [ ! -f "$1" ]; then
       head /dev/urandom | tr -dc A-Za-z0-9 | head -c 60 > $1
     fi
-    < $1
+    cat $1
   }
 else
   echo "Skipping preparation and restarting cni-store-proxy"
