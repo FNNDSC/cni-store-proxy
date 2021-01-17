@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "serve": "node src/server.js",
-    "postinstall": "(! which docker > /dev/null || exit 0 ) || git submodule update --init",
+    "postinstall": "which docker > /dev/null || exit 0 && git submodule update --init",
     "prestart": "yarn -s run cube:check || ( yarn run cube:up && ./prepare.sh )",
     "start": "yarn run serve",
     "cube:up": "minimake/minimake.sh",
