@@ -1,6 +1,6 @@
 {
   "name": "cni-store-proxy",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Reverse proxy for the ChRIS_store API to automatically register and run uploaded plugins",
   "main": "server.js",
   "scripts": {

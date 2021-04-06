@@ -3,6 +3,9 @@ __tests__
 
 .idea/
 .github/
+.git/
+.gitmodules
+.gitignore
 
 node_modules/
 yarn-error.log

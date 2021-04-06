@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   cni-and-cube:
-    image: fnndsc/cni-store-proxy:and-cube
+    image: fnndsc/cni-store-proxy:1.1.0
     volumes:
       - ./secrets/Test_data_generator.json:/etc/chris-plugins/Test_data_generator.json:ro
       - ./secrets/cni_challenge_evaluation.json:/etc/chris-plugins/cni_challenge_evaluation.json:ro
@@ -17,62 +17,84 @@ services:
     ports:
       - "127.0.0.1:8011:8011"
     depends_on:
+      - chris
+    restart: unless-stopped
+    networks:
+      - local
+
+    chris:
+    container_name: chris
+    image: fnndsc/chris:2.1.1-rc.1
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
       - chris_db
       - swift
       - queue
-      - chris_store
-      - pfcon
-    restart: on-failure
     networks:
       - local
+    env_file: secrets.env
+    environment:
+      DJANGO_DB_MIGRATE: "on"
+      DJANGO_COLLECTSTATIC: "on"
   worker:
-    image: fnndsc/chris
-    entrypoint: ''
-    command: celery -A core worker -c 4 -l info -Q main
-    env_file:
-      - ./secrets/.chris.env
-      - ./secrets/.chris_db.env
-      - ./secrets/.swift_service.env
+    image: fnndsc/chris:2.1.1-rc.1
+    command: celery -A core worker -c 4 -l info -Q main1,main2
+    env_file: secrets.env
+    environment:
+      DJANGO_DB_MIGRATE: "off"
+      DJANGO_COLLECTSTATIC: "off"
     depends_on:
       - chris_db
       - swift
       - queue
       - pfcon
-    restart: on-failure
+    restart: unless-stopped
+    networks:
+      - local
+  worker_periodic:
+    image: fnndsc/chris:2.1.1-rc.1
+    environment:
+      DJANGO_DB_MIGRATE: "off"
+      DJANGO_COLLECTSTATIC: "off"
+    command: celery -A core worker -c 2 -l info -Q periodic
+    env_file: secrets.env
+    depends_on:
+      - chris_db
+      - queue
+    restart: unless-stopped
     networks:
       - local
   scheduler:
-    image: fnndsc/chris
-    entrypoint: ''
+    image: fnndsc/chris:2.1.1-rc.1
     command: celery -A core beat -l info --pidfile /home/localuser/celerybeat.pid --scheduler django_celery_beat.schedulers:DatabaseScheduler
-    env_file:
-      - ./secrets/.chris.env
-      - ./secrets/.chris_db.env
-      - ./secrets/.swift_service.env
+    env_file: secrets.env
+    environment:
+      DJANGO_DB_MIGRATE: "off"
+      DJANGO_COLLECTSTATIC: "off"
     depends_on:
       - chris_db
-      - swift
       - queue
-    restart: on-failure
-    networks:
-      - local
-  queue:
-    image: rabbitmq:3
-    restart: on-failure
+    restart: unless-stopped
     networks:
       - local
   chris_db:
     image: mysql:5
+    env_file: secrets.env
+    restart: unless-stopped
     volumes:
       - chris_db_data:/var/lib/mysql
-    env_file:
-      - ./secrets/.chris_db.env
-    restart: on-failure
+    networks:
+      - local
+  queue:
+    image: rabbitmq:3
+    restart: unless-stopped
     networks:
       - local
 
+
   chris_store:
-    image: fnndsc/chris_store:latest
+    image: fnndsc/chris_store:1.1.0
     environment:
       DJANGO_USE_X_FORWARDED_HOST: "true"
     env_file:
@@ -82,7 +104,7 @@ services:
     depends_on:
       - chris_store_db
       - swift
-    restart: on-failure
+    restart: unless-stopped
     networks:
       local:
         aliases:
@@ -93,7 +115,7 @@ services:
       - chris_store_db_data:/var/lib/mysql
     env_file:
       - ./secrets/.chris_store_db.env
-    restart: on-failure
+    restart: unless-stopped
     networks:
       - local
 
@@ -104,7 +126,7 @@ services:
       - swift_storage:/srv
     env_file:
       - ./secrets/.swift_service.env
-    restart: on-failure
+    restart: unless-stopped
     networks:
       local:
         aliases:
@@ -119,7 +141,7 @@ services:
       - swift
       - pman
       - pfioh
-    restart: on-failure
+    restart: unless-stopped
     networks:
       local:
         aliases:
@@ -130,7 +152,7 @@ services:
     command: ["--forever", "--httpResponse", "--createDirsAsNeeded", "--storeBase", "/hostFS/storeBase", "--verbosity", "1"]
     volumes:
       - pfioh-remote:/hostFS/storeBase
-    restart: on-failure
+    restart: unless-stopped
     networks:
       local:
         aliases:
@@ -143,18 +165,19 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - pfioh-remote:/hostFS/storeBase
-    restart: on-failure
+    restart: unless-stopped
     networks:
       local:
         aliases:
           - pman_service
 
+
 networks:
   local:
+  compute-env:
 
 volumes:
   chris_db_data:
   chris_store_db_data:
   swift_storage:
-  pfioh-remote:
-    name: cni-pfioh-remote
+  remote:
