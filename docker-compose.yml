@@ -1,46 +1,76 @@
 version: '3.7'
 
 services:
-  cni-and-cube:
-    image: fnndsc/cni-store-proxy:1.1.0
+  # cni-and-cube:
+  #   image: fnndsc/cni-store-proxy:1.1.0
+  #   volumes:
+  #     - ./secrets/Test_data_generator.json:/etc/chris-plugins/Test_data_generator.json:ro
+  #     - ./secrets/cni_challenge_evaluation.json:/etc/chris-plugins/cni_challenge_evaluation.json:ro
+  #   environment:
+  #     CNI_COMPUTE_ENV: host
+  #     FS_PLUGIN_FILE: /etc/chris-plugins/Test_data_generator.json
+  #     EVALUATOR_FILE: /etc/chris-plugins/cni_challenge_evaluation.json
+  #   ports:
+  #     - "127.0.0.1:8011:8011"
+  #   depends_on:
+  #     - chris
+  #   restart: unless-stopped
+  #   networks:
+  #     - local
+
+  # cni-proxy:
+  #   image: fnndsc/cni-store-proxy:1.0.0
+  #   ports:
+  #     - "8011:8011"
+  # sideloader:
+  #   build: ./sideloader
+
+  sideloader:
+    image: fnndsc/cni-store-proxy:1.0.0
+    command: node src/sideloader.js
+    # warning! do not expose any ports
+    userns_mode: "host"
+    user: root
     volumes:
-      - ./secrets/Test_data_generator.json:/etc/chris-plugins/Test_data_generator.json:ro
-      - ./secrets/cni_challenge_evaluation.json:/etc/chris-plugins/cni_challenge_evaluation.json:ro
-    environment:
-      CNI_COMPUTE_ENV: host
-      FS_PLUGIN_FILE: /etc/chris-plugins/Test_data_generator.json
-      EVALUATOR_FILE: /etc/chris-plugins/cni_challenge_evaluation.json
-    env_file:
-      - ./secrets/.chris.env
-      - ./secrets/.chris_db.env
-      - ./secrets/.swift_service.env
-    ports:
-      - "127.0.0.1:8011:8011"
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      cni-backend:
+        aliases:
+          - sideload.chris
+    restart: unless-stopped
     depends_on:
       - chris
-    restart: unless-stopped
-    networks:
-      - local
 
-    chris:
-    container_name: chris
+  chris:
     image: fnndsc/chris:2.1.1-rc.1
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     depends_on:
       - chris_db
       - swift
       - queue
     networks:
-      - local
-    env_file: secrets.env
+      local:
+      cni-backend:
+        aliases:
+          - cube.chris
+    env_file:
+      - ./secrets/.chris.env
+      - ./secrets/.chris_db.env
+      - ./secrets/.swift_service.env
     environment:
       DJANGO_DB_MIGRATE: "on"
       DJANGO_COLLECTSTATIC: "on"
+    labels:
+      org.chrisproject.role: "cube"
   worker:
     image: fnndsc/chris:2.1.1-rc.1
     command: celery -A core worker -c 4 -l info -Q main1,main2
-    env_file: secrets.env
+    env_file:
+      - ./secrets/.chris.env
+      - ./secrets/.chris_db.env
+      - ./secrets/.swift_service.env
     environment:
       DJANGO_DB_MIGRATE: "off"
       DJANGO_COLLECTSTATIC: "off"
@@ -58,7 +88,10 @@ services:
       DJANGO_DB_MIGRATE: "off"
       DJANGO_COLLECTSTATIC: "off"
     command: celery -A core worker -c 2 -l info -Q periodic
-    env_file: secrets.env
+    env_file:
+      - ./secrets/.chris.env
+      - ./secrets/.chris_db.env
+      - ./secrets/.swift_service.env
     depends_on:
       - chris_db
       - queue
@@ -68,7 +101,10 @@ services:
   scheduler:
     image: fnndsc/chris:2.1.1-rc.1
     command: celery -A core beat -l info --pidfile /home/localuser/celerybeat.pid --scheduler django_celery_beat.schedulers:DatabaseScheduler
-    env_file: secrets.env
+    env_file:
+      - ./secrets/.chris.env
+      - ./secrets/.chris_db.env
+      - ./secrets/.swift_service.env
     environment:
       DJANGO_DB_MIGRATE: "off"
       DJANGO_COLLECTSTATIC: "off"
@@ -80,7 +116,8 @@ services:
       - local
   chris_db:
     image: mysql:5
-    env_file: secrets.env
+    env_file:
+      - ./secrets/.chris_db.env
     restart: unless-stopped
     volumes:
       - chris_db_data:/var/lib/mysql
@@ -95,7 +132,10 @@ services:
 
   chris_store:
     image: fnndsc/chris_store:1.1.0
+    ports:
+      - "8010:8010"
     environment:
+      DJANGO_DB_MIGRATE: "on"
       DJANGO_USE_X_FORWARDED_HOST: "true"
     env_file:
       - ./secrets/.chris_store.env
@@ -109,6 +149,12 @@ services:
       local:
         aliases:
           - chris-store.local
+      cni-backend:
+        aliases:
+          - store.chris
+    labels:
+      org.chrisproject.role: "chris_store"
+
   chris_store_db:
     image: mysql:5
     volumes:
@@ -133,47 +179,43 @@ services:
           - swift_service
 
   pfcon:
-    image: fnndsc/pfcon:latest
-    command: ["--forever", "--httpResponse", "--verbosity", "1"]
-    env_file:
-      - ./secrets/.swift_service.env
-    depends_on:
-      - swift
-      - pman
-      - pfioh
-    restart: unless-stopped
+    image: fnndsc/pfcon:3.2.0
+    environment:
+      COMPUTE_SERVICE_URL: http://pman:5010/api/v1/
+      SECRET_KEY: secret
+    ports:
+      - "127.0.0.1:5005:5005"
+    volumes:
+      - remote:/home/localuser/storeBase
     networks:
       local:
         aliases:
           - pfcon.local
-          - pfcon_service
-  pfioh:
-    image: fnndsc/pfioh:latest
-    command: ["--forever", "--httpResponse", "--createDirsAsNeeded", "--storeBase", "/hostFS/storeBase", "--verbosity", "1"]
-    volumes:
-      - pfioh-remote:/hostFS/storeBase
-    restart: unless-stopped
-    networks:
-      local:
-        aliases:
-          - pfioh_service
+      compute-env:
+    labels:
+      org.chrisproject.role: "pfcon"
   pman:
-    image: fnndsc/pman:latest
+    # https://github.com/FNNDSC/miniChRIS#storebase
+    image: fnndsc/pman:3.0.1-rc.1-single
     environment:
-      - PMAN_DOCKER_VOLUME=cni-pfioh-remote
-    command: ["--rawmode", "1", "--http", "--port", "5010", "--listeners", "12"]
+      CONTAINER_ENV: swarm
+      SECRET_KEY: secret
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - pfioh-remote:/hostFS/storeBase
-    restart: unless-stopped
+    userns_mode: "host"
+    depends_on:
+      - pfcon
+    ports:
+      - "127.0.0.1:5010:5010"
     networks:
-      local:
-        aliases:
-          - pman_service
+      - compute-env
+    labels:
+      org.chrisproject.role: "pman"
 
 
 networks:
   local:
+  cni-backend:
   compute-env:
 
 volumes:

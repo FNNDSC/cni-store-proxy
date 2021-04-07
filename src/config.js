@@ -2,11 +2,13 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 module.exports = {
+  sideload: {
+    url: process.env.SIDELOAD_URL || 'http://sideloader:8009/register'
+  },
   cube: {
-    container: process.env.CNI_CUBE_CONTAINER || 'chris',
     url: process.env.CUBE_URL ?
     process.env.CUBE_URL.replace('/api/v1/', '')
-    : 'http://localhost:8000',
+    : 'http://cube.chris:8000',
     username: process.env.CUBE_USERNAME || 'cniadmin',
     password: process.env.CUBE_PASSWORD || 'cniadmin1234',
     email: process.env.CUBE_EMAIL || 'cni@babymri.org'
@@ -14,7 +16,7 @@ module.exports = {
   chrisStore: {
     url: process.env.CHRIS_STORE_URL ? 
       process.env.CHRIS_STORE_URL.replace('/api/v1/', '')
-      : 'http://localhost:8010',
+      : 'http://store.chris:8010',
     username: process.env.CHRISSTORE_USERNAME || 'cniadmin',
     password: process.env.CHRISSTORE_PASSWORD || 'cniadmin1234',
     email: process.env.CHRISSTORE_EMAIL || 'cni@babymri.org'
@@ -42,6 +44,6 @@ module.exports = {
   },
   feed: {
     name: process.env.CNI_FEED_NAME || 'CNI Challenge',
-    description: process.env.CNI_FEED_DESCRIPTION || 'submissions for the MICCAI Connectomics in Neuroimaging Challenge'
+    description: process.env.CNI_FEED_DESCRIPTION || 'Public submissions for the MICCAI Connectomics in Neuroimaging Challenge'
   }
 }

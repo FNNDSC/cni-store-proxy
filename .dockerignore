@@ -1,5 +1,6 @@
 minimake/
-__tests__
+sideloader/
+__tests__/
 
 .idea/
 .github/

@@ -8,8 +8,9 @@ const colors = require('colors');
  */
 class Cube {
 
-  constructor(url, username, password) {
+  constructor(url, username, password, sideloaderUrl) {
     this.url = url;
+    this.sideloaderUrl = sideloaderUrl;
     this._user = {
       username: username,
       password: password
@@ -30,30 +31,28 @@ class Cube {
   }
 
   /**
-   * Run external script to register the plugin in CUBE.
+   * Invoke sideloader service to register plugin into ChRIS backend.
    * The specified plugin must already have been uploaded to the ChRIS Store.
    *
    * @param pluginName plugin name
    * @return {Promise}
    */
-  registerPlugin(pluginName) {
-    print(`registering "${pluginName}" into CUBE...`);
-    return new Promise(((resolve, reject) =>
-        exec('./plugin2cube.sh ' + pluginName, (error, stdout, stderr) => {
-          if (stdout) {
-            print(colors.green('CUBE <-- (stdout)'));
-            console.log(stdout);
-          }
-          if (stderr) {
-            print(colors.red('CUBE <-- (stderr)'));
-            console.log(stderr);
-          }
-          if (error) {
-            reject(error);
-          }
-          resolve();
-        })
-    ));
+  async registerPlugin(pluginName) {
+    print(`CUBE <--(register) "${pluginName}"`);
+    let res;
+    try {
+      res = await axios.post(
+        this.sideloaderUrl,
+        {
+          name: pluginName
+        }
+      );
+    } catch (e) {
+      if (e.response && e.response.data) {
+        print(colors.red('ERROR') + '\n' + e.response.data);
+        throw e;
+      }
+    }
   }
 
   /**

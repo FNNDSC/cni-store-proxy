@@ -170,12 +170,12 @@ is automatically registered into ChRIS and scheduled to run in a feed.
   | (0) POST
   |     /api/v1/plugins/
   ▼
-+-----------------+  (3) uploadPlugin.sh         +------+
-|                 | ---------------------------> |      |
-| cni-store-proxy |                              | CUBE |
-|                 |  (4) POST                    |      |
-|                 |      /api/v1/<N>/instances/  |      |
-|                 | ---------------------------> |      |
++-----------------+  (3) uploadPlugin.sh         +---------------+
+|                 | ---------------------------> | sideloader.js |
+| cni-store-proxy |                              +---------------+
+|                 |  (4) POST                       |
+|                 |      /api/v1/<N>/instances/  +------+
+|                 | ---------------------------> | CUBE |
 +-----------------+                              +------+
   ▲
   | (1) 201
@@ -236,29 +236,40 @@ Requests are proxied transparently to CUBE, e.g.
 
 Single-machine deployment can be orchestrated by `docker-compose`.
 
-`cni-store-proxy` needs special administrative access to CUBE because
-plugins cannot be registered over an HTTP API. As a workaround,
-`cni-store-proxy` and CUBE run in the same container so that
-`cni-store-proxy` can directly invoke
-`python plugins/services/manager.py`.
+Typically, plugins cannot be registered into ChRIS backend from
+the ChRIS store over a HTTP API. Thus we implemented a workaround.
 
-1. Create internally-used backend secrets:
+#### 1. Create internally-used backend secrets
+
 https://github.com/FNNDSC/ChRIS_ultron_backEnd/wiki/ChRIS-backend-production-services-secret-configuration-files
-2. Generate JSON representations for your fs and evaluator plugins and set `FS_PLUGIN_FILE` and `EVALUATOR_FILE` accordingly.
 
 **For ChRIS_store (in `secrets/.chris_store.env`) `DJANGO_USE_X_FORWARDED_HOST=true` should be set.**
 
+#### 2. Generate plugin JSON representations
+
+Generate plugin JSON representations for your fs and evaluator plugins
+and set `FS_PLUGIN_FILE` and `EVALUATOR_FILE` accordingly.
+
 ```bash
-docker run -u $(id -u) -v $PWD/secrets:/json --rm sandip117/pl-test_data_generator test_data_generator.py --savejson /json
-docker run -u $(id -u) -v $PWD/secrets:/json --rm aiwc/cni_challenge_evaluation cni_challenge_evaluation.py --savejson /json
+docker run -u $(id -u):$(id -g) -v $PWD/secrets:/json --rm sandip117/pl-test_data_generator test_data_generator.py --savejson /json
+docker run -u $(id -u):$(id -g) -v $PWD/secrets:/json --rm aiwc/cni_challenge_evaluation cni_challenge_evaluation.py --savejson /json
 ```
 
-Start everything:
+#### 3. Start services
+
+For same-machine compute environment, make sure docker swarm is active.
 
 ```bash
 docker swarm init --advertise-addr=127.0.0.1
-docker-compose up
 ```
+
+Start the backend services.
+
+```bash
+docker-compose up -d
+```
+
+#### 4. Typical set up of the ChRIS Backend
 
 If `CNI_COMPUTE_ENV` is not host, then you will need to change the address of `pfcon`
 in http://localhost:8000/chris-admin/ or run

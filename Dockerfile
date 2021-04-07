@@ -7,5 +7,5 @@ RUN yarn
 
 USER 15000
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["yarn", "run", "serve"]
 EXPOSE 8011

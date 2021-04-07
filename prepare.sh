@@ -78,11 +78,6 @@ if [ "$num_results" != "null" ] && [ "$num_results" -ge "1" ]; then
   exit 0
 fi
 
-if [ -k CNI_CUBE_CONTAINER ] && ! docker exec $CNI_CUBE_CONTAINER /bin/true; then
-  >&2 echo CUBE_CONTAINER is not correct
-  >&2 echo Did nothing.
-  exit 1
-fi
 
 >&2 echo "Preparing for the CNI challenge..."
 
